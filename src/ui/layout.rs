@@ -1,6 +1,7 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui::Frame;
 
 use super::{
@@ -28,10 +29,76 @@ pub fn draw_layout(f: &mut Frame, app: &App) {
     // Status bar
     draw_status_bar(f, chunks[2], app);
 
+    // Delete confirmation overlay
+    if app.confirm_delete {
+        draw_delete_confirm(f, f.area(), &app.delete_target_name);
+    }
+
     // Help overlay (on top of everything)
     if app.show_help {
         help_overlay::draw_help(f, f.area());
     }
+}
+
+fn draw_delete_confirm(f: &mut Frame, area: Rect, name: &str) {
+    let width = 50u16.min(area.width.saturating_sub(4));
+    let height = 5u16;
+
+    let vert = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length((area.height.saturating_sub(height)) / 2),
+            Constraint::Length(height),
+            Constraint::Min(0),
+        ])
+        .split(area);
+
+    let horiz = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length((area.width.saturating_sub(width)) / 2),
+            Constraint::Length(width),
+            Constraint::Min(0),
+        ])
+        .split(vert[1]);
+
+    let popup_area = horiz[1];
+
+    f.render_widget(Clear, popup_area);
+
+    let display_name = if name.len() > 36 {
+        format!("{}...", &name[..33])
+    } else {
+        name.to_string()
+    };
+
+    let lines = vec![
+        Line::from(""),
+        Line::from(Span::styled(
+            format!("  Delete {}?", display_name),
+            Style::new().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )),
+        Line::from(vec![
+            Span::styled(
+                "  y",
+                Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" yes  "),
+            Span::styled(
+                "n",
+                Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" no"),
+        ]),
+    ];
+
+    let block = Block::default()
+        .title(" Confirm Delete ")
+        .borders(Borders::ALL)
+        .border_style(Style::new().fg(Color::Red));
+
+    let paragraph = Paragraph::new(lines).block(block);
+    f.render_widget(paragraph, popup_area);
 }
 
 fn draw_content(f: &mut Frame, area: Rect, app: &App) {
@@ -51,11 +118,16 @@ fn draw_content(f: &mut Frame, area: Rect, app: &App) {
 fn hint_text(app: &App) -> Vec<(&'static str, &'static str)> {
     let mut hints: Vec<(&str, &str)> = match app.active_tab {
         ActiveTab::Sessions => match app.sessions_pane {
-            SessionsPane::List => vec![("j/k", "nav"), ("Enter", "select")],
+            SessionsPane::List => vec![("j/k", "nav"), ("Enter", "select"), ("d", "delete")],
             SessionsPane::Transcript => vec![("f", "follow"), ("s", "subagent"), ("j/k", "scroll")],
         },
-        ActiveTab::Teams => vec![("j/k", "nav"), ("h/l", "panes"), ("Enter", "drill")],
-        ActiveTab::Todos => vec![("j/k", "nav"), ("h/l", "panes")],
+        ActiveTab::Teams => vec![
+            ("j/k", "nav"),
+            ("h/l", "panes"),
+            ("Enter", "drill"),
+            ("d", "delete"),
+        ],
+        ActiveTab::Todos => vec![("j/k", "nav"), ("h/l", "panes"), ("d", "delete")],
         ActiveTab::Git => {
             if app.git_mode == GitMode::Browse {
                 vec![
@@ -68,7 +140,7 @@ fn hint_text(app: &App) -> Vec<(&'static str, &'static str)> {
                 vec![("j/k", "nav"), ("h/l", "panes"), ("b", "browse")]
             }
         }
-        ActiveTab::Plans => vec![("j/k", "nav"), ("h/l", "panes")],
+        ActiveTab::Plans => vec![("j/k", "nav"), ("h/l", "panes"), ("d", "delete")],
         ActiveTab::GitHubPRs => vec![("j/k", "nav"), ("o", "open"), ("r", "refresh")],
         ActiveTab::GitHubIssues => vec![
             ("j/k", "nav"),

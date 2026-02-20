@@ -53,6 +53,7 @@ pub fn draw_help(f: &mut Frame, area: Rect) {
         ("r", "Refresh (PRs / Issues / Jira / Linear)"),
         ("t", "Show transitions (Jira)"),
         ("/", "Search (Jira)"),
+        ("d / Del", "Delete file (Sessions/Teams/Todos/Plans)"),
         ("? / Ctrl-H", "Toggle this help"),
         ("q / Ctrl+C", "Quit"),
     ];
