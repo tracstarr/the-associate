@@ -4,15 +4,9 @@ use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wra
 use ratatui::Frame;
 
 use super::theme;
+use super::util::truncate_chars;
 use crate::app::{App, PlansPane};
 use crate::model::plan::MarkdownLineKind;
-
-fn truncate_chars(s: &str, max_chars: usize) -> &str {
-    match s.char_indices().nth(max_chars) {
-        Some((idx, _)) => &s[..idx],
-        None => s,
-    }
-}
 
 pub fn draw_plans(f: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()

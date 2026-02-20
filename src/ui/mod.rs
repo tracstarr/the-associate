@@ -14,6 +14,7 @@ pub mod tabs;
 pub mod teams_view;
 pub mod theme;
 pub mod todos_view;
+pub mod util;
 
 use ratatui::Frame;
 

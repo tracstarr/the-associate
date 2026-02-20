@@ -4,16 +4,10 @@ use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wra
 use ratatui::Frame;
 
 use super::theme;
+use super::util::truncate_chars;
 use crate::app::{App, TeamsPane};
 use crate::model::agent_status::AgentStatus;
 use crate::model::task::TaskStatus;
-
-fn truncate_chars(s: &str, max_chars: usize) -> &str {
-    match s.char_indices().nth(max_chars) {
-        Some((idx, _)) => &s[..idx],
-        None => s,
-    }
-}
 
 pub fn draw_teams(f: &mut Frame, area: Rect, app: &App) {
     // Layout: Teams (fixed) | Members/Tasks (fixed) | Detail (fills remaining)
@@ -385,15 +379,13 @@ fn draw_member_detail(f: &mut Frame, area: Rect, app: &App, border_style: ratatu
         .borders(Borders::ALL)
         .border_style(border_style);
 
-    if member.is_none() {
+    let Some(member) = member else {
         let msg = Paragraph::new("No member selected.")
             .style(theme::EMPTY_STATE)
             .block(block);
         f.render_widget(msg, area);
         return;
-    }
-
-    let member = member.unwrap();
+    };
     let label_style = ratatui::style::Style::new().fg(ratatui::style::Color::Yellow);
     let mut lines = Vec::new();
 
@@ -525,7 +517,7 @@ fn draw_member_detail(f: &mut Frame, area: Rect, app: &App, border_style: ratatu
     let paragraph = Paragraph::new(lines)
         .block(block)
         .wrap(Wrap { trim: false })
-        .scroll((app.detail_scroll as u16, 0));
+        .scroll((app.detail_scroll.min(u16::MAX as usize) as u16, 0));
     f.render_widget(paragraph, area);
 }
 
@@ -631,6 +623,6 @@ fn draw_task_detail(f: &mut Frame, area: Rect, app: &App, border_style: ratatui:
     let paragraph = Paragraph::new(lines)
         .block(block)
         .wrap(Wrap { trim: false })
-        .scroll((app.detail_scroll as u16, 0));
+        .scroll((app.detail_scroll.min(u16::MAX as usize) as u16, 0));
     f.render_widget(paragraph, area);
 }

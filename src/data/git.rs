@@ -32,7 +32,16 @@ pub fn load_git_status(cwd: &Path) -> Result<GitStatus> {
         let bytes = line.as_bytes();
         let index_char = bytes[0] as char;
         let worktree_char = bytes[1] as char;
-        let path = line[3..].to_string();
+        let path_str = &line[3..];
+        let path = if index_char == 'R' || index_char == 'C' {
+            path_str
+                .split(" -> ")
+                .last()
+                .unwrap_or(path_str)
+                .to_string()
+        } else {
+            path_str.to_string()
+        };
 
         // Untracked
         if index_char == '?' && worktree_char == '?' {
@@ -91,8 +100,20 @@ fn load_git_diff(cwd: &Path, file_path: &str, staged: bool) -> Result<Vec<DiffLi
 
 fn load_untracked_content(cwd: &Path, file_path: &str) -> Result<Vec<DiffLine>> {
     let full_path = cwd.join(file_path);
-    let content = match std::fs::read_to_string(&full_path) {
-        Ok(c) => c,
+
+    // Size check: if file > 1MB, don't read it
+    if let Ok(metadata) = std::fs::metadata(&full_path) {
+        if metadata.len() > 1_048_576 {
+            return Ok(vec![DiffLine {
+                kind: DiffLineKind::Header,
+                text: "(file too large to display)".to_string(),
+            }]);
+        }
+    }
+
+    // Read as bytes first for binary detection
+    let bytes = match std::fs::read(&full_path) {
+        Ok(b) => b,
         Err(_) => {
             return Ok(vec![DiffLine {
                 kind: DiffLineKind::Header,
@@ -100,6 +121,16 @@ fn load_untracked_content(cwd: &Path, file_path: &str) -> Result<Vec<DiffLine>> 
             }])
         }
     };
+
+    // Binary detection: check for null bytes
+    if bytes.contains(&0) {
+        return Ok(vec![DiffLine {
+            kind: DiffLineKind::Header,
+            text: "(binary file)".to_string(),
+        }]);
+    }
+
+    let content = String::from_utf8_lossy(&bytes);
 
     let mut lines = Vec::new();
     lines.push(DiffLine {
@@ -128,18 +159,18 @@ fn parse_diff_output(output: &str) -> Vec<DiffLine> {
     output
         .lines()
         .map(|line| {
-            let kind = if line.starts_with('+') {
-                DiffLineKind::Add
-            } else if line.starts_with('-') {
-                DiffLineKind::Remove
-            } else if line.starts_with("@@") {
-                DiffLineKind::Hunk
-            } else if line.starts_with("diff ")
+            let kind = if line.starts_with("diff ")
                 || line.starts_with("index ")
                 || line.starts_with("--- ")
                 || line.starts_with("+++ ")
             {
                 DiffLineKind::Header
+            } else if line.starts_with("@@") {
+                DiffLineKind::Hunk
+            } else if line.starts_with('+') {
+                DiffLineKind::Add
+            } else if line.starts_with('-') {
+                DiffLineKind::Remove
             } else {
                 DiffLineKind::Context
             };

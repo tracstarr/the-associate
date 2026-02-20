@@ -166,3 +166,24 @@ pub const CURRENT_ISSUE: Style = Style::new()
     .bg(Color::Yellow)
     .add_modifier(Modifier::BOLD);
 pub const CURRENT_ISSUE_HEADER: Style = Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD);
+
+// Delete confirmation dialog
+pub const DELETE_CONFIRM: Style = Style::new().fg(Color::Red).add_modifier(Modifier::BOLD);
+pub const DELETE_CONFIRM_BORDER: Style = Style::new().fg(Color::Red);
+
+// Error display in status bar
+pub const ERROR_DISPLAY: Style = Style::new().fg(Color::Red).bg(Color::DarkGray);
+
+// Mode badges
+pub const MODE_BADGE_BROWSE: Style = Style::new()
+    .fg(Color::Black)
+    .bg(Color::Yellow)
+    .add_modifier(Modifier::BOLD);
+pub const MODE_BADGE_EDIT: Style = Style::new()
+    .fg(Color::Black)
+    .bg(Color::Red)
+    .add_modifier(Modifier::BOLD);
+pub const MODE_BADGE_SEARCH: Style = Style::new()
+    .fg(Color::Black)
+    .bg(Color::Yellow)
+    .add_modifier(Modifier::BOLD);

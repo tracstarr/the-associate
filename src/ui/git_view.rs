@@ -4,15 +4,9 @@ use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wra
 use ratatui::Frame;
 
 use super::{filebrowser_view, theme};
+use super::util::truncate_chars;
 use crate::app::{App, GitMode, GitPane};
 use crate::model::git::{DiffLineKind, FlatGitItem, GitFileSection};
-
-fn truncate_chars(s: &str, max_chars: usize) -> &str {
-    match s.char_indices().nth(max_chars) {
-        Some((idx, _)) => &s[..idx],
-        None => s,
-    }
-}
 
 pub fn draw_git(f: &mut Frame, area: Rect, app: &App) {
     if app.git_mode == GitMode::Browse {

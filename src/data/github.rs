@@ -15,7 +15,7 @@ pub fn list_open_prs(repo: &str) -> Result<Vec<PullRequest>> {
             "--limit",
             "100",
             "--json",
-            "number,title,state,author,url,createdAt,updatedAt,headRefName,baseRefName,isDraft,additions,deletions,reviewDecision,assignees,labels",
+            "number,title,state,author,url,createdAt,updatedAt,headRefName,baseRefName,isDraft,additions,deletions,reviewDecision,assignees,labels,body",
         ])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())

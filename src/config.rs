@@ -139,6 +139,7 @@ impl ProjectConfig {
             .as_ref()
             .and_then(|d| d.tick_rate)
             .unwrap_or(TICK_RATE_MS)
+            .max(50)
     }
 
     pub fn tail_lines(&self) -> usize {
@@ -171,11 +172,23 @@ impl ProjectConfig {
 
     /// Issue state filter. Default: "open".
     pub fn github_issues_state(&self) -> &str {
-        self.github
+        const VALID_STATES: &[&str] = &["open", "closed", "all"];
+        match self
+            .github
             .as_ref()
             .and_then(|g| g.issues.as_ref())
             .and_then(|i| i.state.as_deref())
-            .unwrap_or("open")
+        {
+            Some(state) if VALID_STATES.contains(&state) => state,
+            Some(state) => {
+                eprintln!(
+                    "Warning: invalid github.issues.state {:?}, defaulting to \"open\"",
+                    state
+                );
+                "open"
+            }
+            None => "open",
+        }
     }
 
     pub fn jira_project(&self) -> Option<&str> {
@@ -199,10 +212,18 @@ impl ProjectConfig {
     }
 
     pub fn send_direction(&self) -> &str {
-        self.pane
-            .as_ref()
-            .and_then(|p| p.direction.as_deref())
-            .unwrap_or("right")
+        const VALID_DIRECTIONS: &[&str] = &["right", "left", "up", "down"];
+        match self.pane.as_ref().and_then(|p| p.direction.as_deref()) {
+            Some(dir) if VALID_DIRECTIONS.contains(&dir) => dir,
+            Some(dir) => {
+                eprintln!(
+                    "Warning: invalid pane.direction {:?}, defaulting to \"right\"",
+                    dir
+                );
+                "right"
+            }
+            None => "right",
+        }
     }
 }
 
@@ -212,7 +233,13 @@ pub fn load_project_config(cwd: &Path) -> ProjectConfig {
     let path = cwd.join(".assoc.toml");
     if path.exists() {
         let content = std::fs::read_to_string(&path).unwrap_or_default();
-        toml::from_str(&content).unwrap_or_default()
+        match toml::from_str::<ProjectConfig>(&content) {
+            Ok(config) => config,
+            Err(e) => {
+                eprintln!("Warning: failed to parse .assoc.toml: {e}");
+                ProjectConfig::default()
+            }
+        }
     } else {
         ProjectConfig::default()
     }

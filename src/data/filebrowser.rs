@@ -7,11 +7,14 @@ use anyhow::Result;
 use crate::data::plans;
 use crate::model::filebrowser::{EntryKind, FileBrowserEntry, FileContent};
 
+const MAX_DEPTH: usize = 20;
+
 /// Build a flat list of directory entries from `root`, expanding only directories in `expanded`.
 /// Directories first, then files, case-insensitive sort. Respect .gitignore.
 pub fn build_tree(root: &Path, expanded: &HashSet<PathBuf>) -> Result<Vec<FileBrowserEntry>> {
+    let ignored = load_git_ignored_set(root);
     let mut result = Vec::new();
-    collect_children(root, root, expanded, 0, &mut result)?;
+    collect_children(root, root, expanded, 0, &ignored, &mut result)?;
     Ok(result)
 }
 
@@ -20,11 +23,15 @@ fn collect_children(
     dir: &Path,
     expanded: &HashSet<PathBuf>,
     depth: usize,
+    ignored: &HashSet<PathBuf>,
     result: &mut Vec<FileBrowserEntry>,
 ) -> Result<()> {
+    if depth >= MAX_DEPTH {
+        return Ok(());
+    }
     let entries = list_dir_entries(dir, depth)?;
     for entry in entries {
-        if is_git_ignored(root, &entry.path) {
+        if is_ignored(root, &entry.path, ignored) {
             continue;
         }
         let is_dir = entry.kind == EntryKind::Directory;
@@ -32,7 +39,7 @@ fn collect_children(
         result.push(entry);
 
         if is_dir && expanded.contains(&path) {
-            collect_children(root, &path, expanded, depth + 1, result)?;
+            collect_children(root, &path, expanded, depth + 1, ignored, result)?;
         }
     }
     Ok(())
@@ -79,7 +86,36 @@ fn list_dir_entries(dir: &Path, depth: usize) -> Result<Vec<FileBrowserEntry>> {
     Ok(dirs)
 }
 
-fn is_git_ignored(root: &Path, path: &Path) -> bool {
+/// Load all git-ignored file paths in one batch call.
+fn load_git_ignored_set(root: &Path) -> HashSet<PathBuf> {
+    let output = Command::new("git")
+        .args([
+            "ls-files",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+            "--directory",
+        ])
+        .current_dir(root)
+        .output();
+
+    let mut set = HashSet::new();
+    if let Ok(output) = output {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for line in stdout.lines() {
+                let line = line.trim_end_matches('/');
+                if !line.is_empty() {
+                    set.insert(root.join(line));
+                }
+            }
+        }
+    }
+    set
+}
+
+/// Check if a path should be ignored (either .git dir or in the ignored set).
+fn is_ignored(root: &Path, path: &Path, ignored: &HashSet<PathBuf>) -> bool {
     // Always ignore .git directory itself
     if let Some(name) = path.file_name() {
         if name == ".git" {
@@ -87,17 +123,23 @@ fn is_git_ignored(root: &Path, path: &Path) -> bool {
         }
     }
 
-    // Try `git check-ignore -q <path>` - if exit code 0, it's ignored
-    let result = Command::new("git")
-        .args(["check-ignore", "-q"])
-        .arg(path)
-        .current_dir(root)
-        .output();
-
-    match result {
-        Ok(output) => output.status.success(),
-        Err(_) => false, // Not a git repo or git not available — don't filter
+    // Check against the pre-loaded ignored set
+    if ignored.contains(path) {
+        return true;
     }
+
+    // Also check if any ancestor is ignored (for nested paths inside ignored dirs)
+    if let Ok(rel) = path.strip_prefix(root) {
+        let mut check = root.to_path_buf();
+        for component in rel.components() {
+            check.push(component);
+            if ignored.contains(&check) {
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 /// Read file content for display.
