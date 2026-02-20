@@ -313,6 +313,11 @@ fn run_app(
             if app.has_jira && app.jira_last_poll.elapsed() >= poll_interval {
                 app.load_jira_issues();
             }
+
+            // Poll Linear every 60s
+            if app.has_linear && app.linear_last_poll.elapsed() >= poll_interval {
+                app.load_linear_issues();
+            }
         }
 
         if app.should_quit {
@@ -500,6 +505,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             app::ActiveTab::GitHubPRs => app.gh_open_selected(),
             app::ActiveTab::GitHubIssues => app.issues_open_in_browser(),
             app::ActiveTab::Jira => app.jira_open_selected(),
+            app::ActiveTab::Linear => app.linear_open_selected(),
             _ => {}
         },
 
@@ -508,6 +514,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             app::ActiveTab::GitHubPRs => app.load_github_prs(),
             app::ActiveTab::GitHubIssues => app.load_github_issues(),
             app::ActiveTab::Jira => app.load_jira_issues(),
+            app::ActiveTab::Linear => app.load_linear_issues(),
             _ => {}
         },
 

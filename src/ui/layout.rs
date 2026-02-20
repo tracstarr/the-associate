@@ -4,7 +4,7 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 use super::{
-    git_view, github_view, help_overlay, issues_view, jira_view, plans_view, sessions_view, tabs,
+    git_view, github_view, help_overlay, issues_view, jira_view, linear_view, plans_view, sessions_view, tabs,
     teams_view, theme, todos_view,
 };
 use crate::app::{ActiveTab, App, GitMode, SessionsPane};
@@ -44,6 +44,7 @@ fn draw_content(f: &mut Frame, area: Rect, app: &App) {
         ActiveTab::GitHubPRs => github_view::draw_github(f, area, app),
         ActiveTab::GitHubIssues => issues_view::draw_issues(f, area, app),
         ActiveTab::Jira => jira_view::draw_jira(f, area, app),
+        ActiveTab::Linear => linear_view::draw_linear(f, area, app),
     }
 }
 
@@ -85,6 +86,7 @@ fn hint_text(app: &App) -> Vec<(&'static str, &'static str)> {
             ("/", "search"),
             ("t", "transition"),
         ],
+        ActiveTab::Linear => vec![("j/k", "nav"), ("o", "open"), ("r", "refresh")],
     };
     hints.push(("^H", "help"));
     hints

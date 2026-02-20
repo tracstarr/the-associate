@@ -31,6 +31,7 @@ pub const JSONL_TAIL_LINES: usize = 200;
 pub struct ProjectConfig {
     pub github: Option<GithubConfig>,
     pub jira: Option<JiraConfig>,
+    pub linear: Option<LinearConfig>,
     pub display: Option<DisplayConfig>,
 }
 
@@ -54,6 +55,13 @@ pub struct GithubIssuesConfig {
 pub struct JiraConfig {
     pub project: Option<String>,
     pub jql: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LinearConfig {
+    pub api_key: Option<String>,
+    pub username: Option<String>,
+    pub team: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -113,6 +121,18 @@ impl ProjectConfig {
 
     pub fn jira_jql(&self) -> Option<&str> {
         self.jira.as_ref().and_then(|j| j.jql.as_deref())
+    }
+
+    pub fn linear_api_key(&self) -> Option<&str> {
+        self.linear.as_ref().and_then(|l| l.api_key.as_deref())
+    }
+
+    pub fn linear_username(&self) -> Option<&str> {
+        self.linear.as_ref().and_then(|l| l.username.as_deref())
+    }
+
+    pub fn linear_team(&self) -> Option<&str> {
+        self.linear.as_ref().and_then(|l| l.team.as_deref())
     }
 }
 
