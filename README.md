@@ -134,6 +134,15 @@ github_prs = true
 github_issues = true
 jira = true
 linear = true
+
+# Custom prompts for the prompt picker (press 'p' on issue tabs)
+[[prompts]]
+title = "Fix Bug"
+prompt = "Investigate and fix the bug described in this ticket."
+
+[[prompts]]
+title = "Code Review"
+prompt = "Review the code changes related to this ticket and provide feedback."
 ```
 
 ### GitHub settings
@@ -183,6 +192,29 @@ Set any tab to `false` to disable it entirely. Disabled tabs are hidden from the
 | `tabs.jira` | Boolean | `true` | Show the Jira tab. When `false`, `acli` is not detected at startup. |
 | `tabs.linear` | Boolean | `true` | Show the Linear tab. When `false`, the Linear API key is ignored and no polling occurs. |
 
+### Custom Prompts
+
+Define reusable prompt templates for the ticket-to-Claude launcher using the `[[prompts]]` array. Each entry has a `title` (shown in the picker) and a `prompt` (the text inserted into the editor).
+
+```toml
+[[prompts]]
+title = "Fix Bug"
+prompt = "Investigate and fix the bug described in this ticket."
+
+[[prompts]]
+title = "Code Review"
+prompt = "Review the code changes related to this ticket and provide feedback."
+```
+
+When you press `p` on a PRs, Issues, Jira, or Linear tab:
+- **Without custom prompts** — the prompt editor opens immediately with a default prompt generated from the ticket's title and description.
+- **With custom prompts** — a picker overlay appears listing "Default (from ticket)" plus your custom prompts. Select one with `j`/`k` and `Enter`, or press `Esc` to cancel. The selected prompt is loaded into the editor for further editing before launch.
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `prompts[].title` | String | Display name shown in the prompt picker. |
+| `prompts[].prompt` | String | The prompt text inserted into the editor when selected. |
+
 ## Keyboard Shortcuts
 
 The Associate is fully keyboard-driven. Press `?` or `Ctrl+H` at any time to show the help overlay inside the TUI.
@@ -223,7 +255,7 @@ The Associate is fully keyboard-driven. Press `?` or `Ctrl+H` at any time to sho
 | `Ctrl+S` | Git (browser) | Save the file being edited |
 | `Esc` | Git (browser) | Cancel editing |
 | `Backspace` | Git (browser) | Collapse directory or navigate to parent |
-| `p` | PRs / Issues / Jira / Linear | Open the prompt modal to compose and launch a Claude Code task from the selected ticket |
+| `p` | PRs / Issues / Jira / Linear | Open the prompt picker (if custom prompts are configured) or go straight to the prompt editor to compose and launch a Claude Code task from the selected ticket |
 | `o` | PRs / Issues / Jira / Linear | Open the selected item in your web browser |
 | `r` | PRs / Issues / Jira / Linear | Refresh data from the remote service |
 | `n` | Issues | Create a new issue (opens editor popup) |
