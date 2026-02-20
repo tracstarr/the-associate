@@ -3,11 +3,15 @@ set -euo pipefail
 
 # The Associate installer
 # Builds the release binary and installs to ~/.local/bin
+#
+# Usage:
+#   ./install.sh              # Build and install (or update)
+#   ./install.sh update       # Pull latest source, rebuild, and install
+#   ./install.sh uninstall    # Remove binary from ~/.local/bin
 
 BINARY_NAME="assoc"
 INSTALL_DIR="${HOME}/.local/bin"
-
-echo "Building The Associate..."
+ACTION="${1:-install}"
 
 # Detect platform and set PATH for build tools
 if [[ "$(uname -o 2>/dev/null)" == "Msys" ]] || [[ "$OSTYPE" == "msys" ]]; then
@@ -16,24 +20,13 @@ if [[ "$(uname -o 2>/dev/null)" == "Msys" ]] || [[ "$OSTYPE" == "msys" ]]; then
     BINARY_NAME="assoc.exe"
 fi
 
-# Build release binary
-cargo build --release
+INSTALLED_PATH="${INSTALL_DIR}/${BINARY_NAME}"
 
-# Create install directory
-mkdir -p "$INSTALL_DIR"
+add_to_path() {
+    if echo "$PATH" | tr ':' '\n' | grep -q "$(realpath "$INSTALL_DIR" 2>/dev/null || echo "$INSTALL_DIR")"; then
+        return
+    fi
 
-# Copy binary
-BUILT="target/release/${BINARY_NAME}"
-if [[ ! -f "$BUILT" ]]; then
-    echo "Error: Build succeeded but binary not found at $BUILT"
-    exit 1
-fi
-
-cp "$BUILT" "${INSTALL_DIR}/${BINARY_NAME}"
-echo "Installed ${BINARY_NAME} to ${INSTALL_DIR}/"
-
-# Check if INSTALL_DIR is on PATH
-if ! echo "$PATH" | tr ':' '\n' | grep -q "$(realpath "$INSTALL_DIR")"; then
     echo ""
     echo "WARNING: ${INSTALL_DIR} is not on your PATH."
     echo ""
@@ -62,7 +55,72 @@ if ! echo "$PATH" | tr ':' '\n' | grep -q "$(realpath "$INSTALL_DIR")"; then
         echo "Skipped. Add manually:"
         echo "  export PATH=\"\${HOME}/.local/bin:\${PATH}\""
     fi
+}
+
+# === UNINSTALL ===
+if [[ "$ACTION" == "uninstall" ]]; then
+    echo "Uninstalling The Associate..."
+
+    if [[ -f "$INSTALLED_PATH" ]]; then
+        rm "$INSTALLED_PATH"
+        echo "Removed ${INSTALLED_PATH}"
+        echo ""
+        echo "The Associate has been uninstalled."
+        echo "Note: Your shell profile may still have a PATH entry for ${INSTALL_DIR}."
+        echo "Remove it manually if no other binaries use that directory."
+    else
+        echo "The Associate is not installed at ${INSTALLED_PATH}."
+    fi
+    exit 0
 fi
 
-echo ""
-echo "Done! Run 'assoc' to start The Associate."
+# === UPDATE ===
+if [[ "$ACTION" == "update" ]]; then
+    echo "Updating The Associate..."
+
+    # Pull latest source if inside a git repository
+    if git rev-parse --is-inside-work-tree &>/dev/null; then
+        echo "Pulling latest source..."
+        git pull
+    else
+        echo "Not a git repository — skipping source update. Build from current source."
+    fi
+fi
+
+# === INSTALL / UPDATE (build & copy) ===
+if [[ "$ACTION" == "install" || "$ACTION" == "update" ]]; then
+    IS_UPDATE=false
+    if [[ -f "$INSTALLED_PATH" ]]; then
+        IS_UPDATE=true
+    fi
+
+    echo "Building The Associate..."
+    cargo build --release
+
+    # Create install directory
+    mkdir -p "$INSTALL_DIR"
+
+    # Copy binary
+    BUILT="target/release/${BINARY_NAME}"
+    if [[ ! -f "$BUILT" ]]; then
+        echo "Error: Build succeeded but binary not found at $BUILT"
+        exit 1
+    fi
+
+    cp "$BUILT" "$INSTALLED_PATH"
+    echo "Installed ${BINARY_NAME} to ${INSTALL_DIR}/"
+
+    # Check if INSTALL_DIR is on PATH
+    add_to_path
+
+    echo ""
+    if [[ "$IS_UPDATE" == true ]]; then
+        echo "Done! The Associate has been updated."
+    else
+        echo "Done! Run 'assoc' to start The Associate."
+    fi
+else
+    echo "Unknown action: $ACTION"
+    echo "Usage: $0 [install|update|uninstall]"
+    exit 1
+fi

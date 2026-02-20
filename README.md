@@ -25,7 +25,35 @@ Run this one-liner in PowerShell to download and install the latest release:
 irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1 | iex
 ```
 
-This downloads `assoc.exe` from the latest GitHub release and installs it to `%LOCALAPPDATA%\Programs\assoc`, adding it to your user PATH automatically.
+This downloads `assoc.exe` from the latest GitHub release and installs it to `%LOCALAPPDATA%\bin`, adding it to your user PATH automatically.
+
+### Update
+
+Re-run the install command to update to the latest release:
+
+```powershell
+irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1 | iex
+```
+
+If you built from source, pull the latest changes and rebuild:
+
+```bash
+./install.sh update
+```
+
+### Uninstall
+
+Remove The Associate and clean up the PATH entry:
+
+```powershell
+$env:ASSOC_ACTION='uninstall'; irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1 | iex
+```
+
+If you built from source:
+
+```bash
+./install.sh uninstall
+```
 
 ### Build from source
 
@@ -39,7 +67,11 @@ export PATH="/c/Users/$USER/.cargo/bin:$PATH:/c/msys64/mingw64/bin"
 cargo build --release
 ```
 
-The binary will be at `target/release/assoc.exe`. Copy it to a directory on your PATH for easy access.
+The binary will be at `target/release/assoc.exe`. Copy it to a directory on your PATH for easy access. Alternatively, use the install script to build and install in one step:
+
+```bash
+./install.sh
+```
 
 > **Note:** The release profile uses `strip = true`, `lto = true`, and `opt-level = "z"` for a small, optimized binary.
 
