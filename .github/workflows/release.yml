@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify tag matches Cargo.toml version
+        run: |
+          CARGO_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$CARGO_VERSION" != "$TAG_VERSION" ]; then
+            echo "Error: tag $GITHUB_REF_NAME does not match Cargo.toml version $CARGO_VERSION"
+            exit 1
+          fi
+
+      - name: Build Docker image
+        run: docker build -t the-associate-builder .
+
+      - name: Extract assoc.exe
+        run: |
+          docker run --rm the-associate-builder \
+            cat target/x86_64-pc-windows-gnu/release/assoc.exe > assoc.exe
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: The Associate ${{ github.ref_name }}
+          files: assoc.exe
+          fail_on_unmatched_files: true
+          generate_release_notes: true
