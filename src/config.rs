@@ -33,6 +33,54 @@ pub struct ProjectConfig {
     pub jira: Option<JiraConfig>,
     pub linear: Option<LinearConfig>,
     pub display: Option<DisplayConfig>,
+    #[serde(default)]
+    pub tabs: TabsConfig,
+}
+
+/// Per-tab enable/disable configuration.
+/// All tabs default to enabled (`true`). Set a tab to `false` to disable it
+/// entirely — its data won't be loaded, watched, or polled.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct TabsConfig {
+    sessions: Option<bool>,
+    teams: Option<bool>,
+    todos: Option<bool>,
+    git: Option<bool>,
+    plans: Option<bool>,
+    github_prs: Option<bool>,
+    github_issues: Option<bool>,
+    jira: Option<bool>,
+    linear: Option<bool>,
+}
+
+impl TabsConfig {
+    pub fn sessions(&self) -> bool {
+        self.sessions.unwrap_or(true)
+    }
+    pub fn teams(&self) -> bool {
+        self.teams.unwrap_or(true)
+    }
+    pub fn todos(&self) -> bool {
+        self.todos.unwrap_or(true)
+    }
+    pub fn git(&self) -> bool {
+        self.git.unwrap_or(true)
+    }
+    pub fn plans(&self) -> bool {
+        self.plans.unwrap_or(true)
+    }
+    pub fn github_prs(&self) -> bool {
+        self.github_prs.unwrap_or(true)
+    }
+    pub fn github_issues(&self) -> bool {
+        self.github_issues.unwrap_or(true)
+    }
+    pub fn jira(&self) -> bool {
+        self.jira.unwrap_or(true)
+    }
+    pub fn linear(&self) -> bool {
+        self.linear.unwrap_or(true)
+    }
 }
 
 #[derive(Debug, Deserialize)]

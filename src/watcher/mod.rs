@@ -5,16 +5,24 @@ use std::time::Duration;
 use anyhow::Result;
 use notify_debouncer_mini::{new_debouncer, DebouncedEventKind};
 
-use crate::config::DEBOUNCE_MS;
+use crate::config::{TabsConfig, DEBOUNCE_MS};
 use crate::event::{AppEvent, FileChange};
 
 /// Start the file watcher, sending FileChanged events to the given sender.
+/// Directories for disabled tabs are not watched.
 pub fn start_watcher(
     claude_home: PathBuf,
     encoded_project: String,
     project_cwd: PathBuf,
     tx: mpsc::Sender<AppEvent>,
+    tabs_config: &TabsConfig,
 ) -> Result<notify_debouncer_mini::Debouncer<notify::RecommendedWatcher>> {
+    let sessions_enabled = tabs_config.sessions();
+    let teams_enabled = tabs_config.teams();
+    let todos_enabled = tabs_config.todos();
+    let git_enabled = tabs_config.git();
+    let plans_enabled = tabs_config.plans();
+
     let project_dir = claude_home.join("projects").join(&encoded_project);
     let teams_dir = claude_home.join("teams");
     let tasks_dir = claude_home.join("tasks");
@@ -51,34 +59,34 @@ pub fn start_watcher(
     let watcher = debouncer.watcher();
 
     // Watch project directory (recursive to catch subagent transcripts)
-    if project_dir.exists() {
+    if sessions_enabled && project_dir.exists() {
         let _ = watcher.watch(&project_dir, notify::RecursiveMode::Recursive);
     }
 
     // Watch teams directory
-    if teams_dir.exists() {
+    if teams_enabled && teams_dir.exists() {
         let _ = watcher.watch(&teams_dir, notify::RecursiveMode::Recursive);
     }
 
     // Watch tasks directory
-    if tasks_dir.exists() {
+    if teams_enabled && tasks_dir.exists() {
         let _ = watcher.watch(&tasks_dir, notify::RecursiveMode::Recursive);
     }
 
     // Watch todos directory
-    if todos_dir.exists() {
+    if todos_enabled && todos_dir.exists() {
         let _ = watcher.watch(&todos_dir, notify::RecursiveMode::Recursive);
     }
 
     // Watch plans directory
     let plans_dir = claude_home.join("plans");
-    if plans_dir.exists() {
+    if plans_enabled && plans_dir.exists() {
         let _ = watcher.watch(&plans_dir, notify::RecursiveMode::NonRecursive);
     }
 
     // Watch .git directory for git status changes
     let git_dir = project_cwd.join(".git");
-    if git_dir.exists() {
+    if git_enabled && git_dir.exists() {
         let _ = watcher.watch(&git_dir, notify::RecursiveMode::NonRecursive);
     }
 

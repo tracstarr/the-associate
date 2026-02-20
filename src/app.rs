@@ -278,9 +278,13 @@ impl App {
         let encoded_project = path_encoding::encode_project_path(&project_cwd);
         let project_config = config::load_project_config(&project_cwd);
 
-        let has_gh = cli_detect::is_available("gh");
-        let has_jira = cli_detect::is_available("acli");
-        let has_linear = project_config.linear_api_key().is_some();
+        // Skip CLI detection entirely when associated tabs are disabled
+        let gh_tabs_wanted =
+            project_config.tabs.github_prs() || project_config.tabs.github_issues();
+        let has_gh = gh_tabs_wanted && cli_detect::is_available("gh");
+        let has_jira = project_config.tabs.jira() && cli_detect::is_available("acli");
+        let has_linear =
+            project_config.tabs.linear() && project_config.linear_api_key().is_some();
         let has_claude = cli_detect::is_available("claude");
         // Config github.repo overrides git remote detection
         let gh_repo = project_config.github_repo().map(String::from).or_else(|| {
@@ -310,7 +314,7 @@ impl App {
 
         let tail_lines = project_config.tail_lines();
 
-        App {
+        let mut app = App {
             should_quit: false,
             active_tab: ActiveTab::Sessions,
             show_help: false,
@@ -439,10 +443,35 @@ impl App {
 
             last_update: Instant::now(),
             last_error: None,
+        };
+
+        // Default to the first enabled tab
+        let visible = app.visible_tabs();
+        if let Some(first) = visible.first() {
+            app.active_tab = first.clone();
+        }
+
+        app
+    }
+
+    /// Check whether a tab is enabled via the `[tabs]` config section.
+    pub fn is_tab_enabled(&self, tab: &ActiveTab) -> bool {
+        let tc = &self.project_config.tabs;
+        match tab {
+            ActiveTab::Sessions => tc.sessions(),
+            ActiveTab::Teams => tc.teams(),
+            ActiveTab::Todos => tc.todos(),
+            ActiveTab::Git => tc.git(),
+            ActiveTab::Plans => tc.plans(),
+            ActiveTab::GitHubPRs => tc.github_prs(),
+            ActiveTab::GitHubIssues => tc.github_issues(),
+            ActiveTab::Jira => tc.jira(),
+            ActiveTab::Linear => tc.linear(),
+            ActiveTab::Processes => true,
         }
     }
 
-    /// Return the list of tabs that should be visible based on CLI availability.
+    /// Return the list of tabs that should be visible based on CLI availability and config.
     pub fn visible_tabs(&self) -> Vec<ActiveTab> {
         let mut tabs = vec![
             ActiveTab::Sessions,
@@ -466,20 +495,40 @@ impl App {
         if !self.processes.is_empty() {
             tabs.push(ActiveTab::Processes);
         }
+        // Filter out tabs disabled in [tabs] config
+        tabs.retain(|t| self.is_tab_enabled(t));
         tabs
     }
 
-    /// Load all data from disk.
+    /// Load all data from disk, skipping disabled tabs.
     pub fn load_all(&mut self) {
-        self.load_sessions();
-        self.load_teams();
-        self.load_todos();
-        self.load_git_data();
-        self.load_plans();
-        self.load_github_prs();
-        self.load_github_issues();
-        self.load_jira_issues();
-        self.load_linear_issues();
+        if self.is_tab_enabled(&ActiveTab::Sessions) {
+            self.load_sessions();
+        }
+        if self.is_tab_enabled(&ActiveTab::Teams) {
+            self.load_teams();
+        }
+        if self.is_tab_enabled(&ActiveTab::Todos) {
+            self.load_todos();
+        }
+        if self.is_tab_enabled(&ActiveTab::Git) {
+            self.load_git_data();
+        }
+        if self.is_tab_enabled(&ActiveTab::Plans) {
+            self.load_plans();
+        }
+        if self.is_tab_enabled(&ActiveTab::GitHubPRs) {
+            self.load_github_prs();
+        }
+        if self.is_tab_enabled(&ActiveTab::GitHubIssues) {
+            self.load_github_issues();
+        }
+        if self.is_tab_enabled(&ActiveTab::Jira) {
+            self.load_jira_issues();
+        }
+        if self.is_tab_enabled(&ActiveTab::Linear) {
+            self.load_linear_issues();
+        }
         self.last_update = Instant::now();
     }
 
@@ -768,45 +817,96 @@ impl App {
     }
 
     /// Handle a file change event from the watcher.
+    /// Skips processing if the associated tab is disabled.
     pub fn handle_file_change(&mut self, change: FileChange) {
-        match change {
+        let handled = match change {
             FileChange::SessionIndex => {
-                self.load_sessions();
+                if self.is_tab_enabled(&ActiveTab::Sessions) {
+                    self.load_sessions();
+                    true
+                } else {
+                    false
+                }
             }
-            FileChange::Transcript(_path) => {
-                self.refresh_transcript();
+            FileChange::Transcript(_) => {
+                if self.is_tab_enabled(&ActiveTab::Sessions) {
+                    self.refresh_transcript();
+                    true
+                } else {
+                    false
+                }
             }
-            FileChange::SubagentTranscript(_path) => {
-                self.refresh_subagent_transcript();
+            FileChange::SubagentTranscript(_) => {
+                if self.is_tab_enabled(&ActiveTab::Sessions) {
+                    self.refresh_subagent_transcript();
+                    true
+                } else {
+                    false
+                }
             }
             FileChange::TeamConfig(_) => {
-                self.load_teams();
+                if self.is_tab_enabled(&ActiveTab::Teams) {
+                    self.load_teams();
+                    true
+                } else {
+                    false
+                }
             }
             FileChange::TeamInbox(_, _) => {
-                self.load_inbox_for_selected_member();
-                self.compute_agent_statuses();
+                if self.is_tab_enabled(&ActiveTab::Teams) {
+                    self.load_inbox_for_selected_member();
+                    self.compute_agent_statuses();
+                    true
+                } else {
+                    false
+                }
             }
-            FileChange::TaskFile(_team) => {
-                self.load_tasks_for_selected_team();
-                self.compute_agent_statuses();
+            FileChange::TaskFile(_) => {
+                if self.is_tab_enabled(&ActiveTab::Teams) {
+                    self.load_tasks_for_selected_team();
+                    self.compute_agent_statuses();
+                    true
+                } else {
+                    false
+                }
             }
             FileChange::TodoFile(_) => {
-                self.load_todos();
+                if self.is_tab_enabled(&ActiveTab::Todos) {
+                    self.load_todos();
+                    true
+                } else {
+                    false
+                }
             }
             FileChange::GitChange => {
-                self.load_git_data();
+                if self.is_tab_enabled(&ActiveTab::Git) {
+                    self.load_git_data();
+                    true
+                } else {
+                    false
+                }
             }
             FileChange::PlanFile(_) => {
-                self.load_plans();
+                if self.is_tab_enabled(&ActiveTab::Plans) {
+                    self.load_plans();
+                    true
+                } else {
+                    false
+                }
             }
+        };
+        if handled {
+            self.last_update = Instant::now();
         }
-        self.last_update = Instant::now();
     }
 
     // --- Navigation helpers ---
 
     pub fn next_tab(&mut self) {
         let tabs = self.visible_tabs();
+        if tabs.len() <= 1 {
+            return;
+        }
         if let Some(idx) = tabs.iter().position(|t| *t == self.active_tab) {
             let next = (idx + 1) % tabs.len();
             self.on_tab_switch(&tabs[next]);
@@ -816,6 +916,9 @@ impl App {
 
     pub fn prev_tab(&mut self) {
         let tabs = self.visible_tabs();
+        if tabs.len() <= 1 {
+            return;
+        }
         if let Some(idx) = tabs.iter().position(|t| *t == self.active_tab) {
             let prev = if idx == 0 { tabs.len() - 1 } else { idx - 1 };
             self.on_tab_switch(&tabs[prev]);
@@ -824,8 +927,10 @@ impl App {
     }
 
     pub fn switch_to_tab(&mut self, tab: ActiveTab) {
-        self.on_tab_switch(&tab);
-        self.active_tab = tab;
+        if self.is_tab_enabled(&tab) {
+            self.on_tab_switch(&tab);
+            self.active_tab = tab;
+        }
     }
 
     fn on_tab_switch(&mut self, target: &ActiveTab) {
