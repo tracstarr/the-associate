@@ -43,13 +43,11 @@ fn draw_issue_list(f: &mut Frame, area: Rect, app: &App) {
             .linear_flat_list
             .iter()
             .map(|item| match item {
-                FlatLinearItem::StateHeader(name, state_type) => {
-                    let style = match state_type.as_str() {
-                        "started" => theme::LINEAR_STARTED,
-                        "completed" => theme::LINEAR_COMPLETED,
-                        _ => theme::LINEAR_UNSTARTED,
-                    };
-                    ListItem::new(Line::from(Span::styled(name.clone(), style)))
+                FlatLinearItem::AssignmentHeader(name) => {
+                    ListItem::new(Line::from(Span::styled(
+                        name.clone(),
+                        theme::LINEAR_SECTION,
+                    )))
                 }
                 FlatLinearItem::Issue(issue) => {
                     let priority_style = match issue.priority {

@@ -38,7 +38,7 @@ pub fn draw_help(f: &mut Frame, area: Rect) {
         ("1-9", "Jump to tab by number"),
         ("j/k or Up/Down", "Navigate list / scroll"),
         ("h/l or Left/Right", "Switch panes"),
-        ("Enter", "Select / open"),
+        ("Enter", "Select / open / open browser (Linear)"),
         ("g / G", "Jump to top / bottom"),
         ("f", "Toggle follow mode (Sessions)"),
         ("s", "Cycle subagent transcripts (Sessions)"),

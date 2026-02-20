@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# Build The Associate in Docker and copy assoc.exe to the project root.
+# Build assoc.exe via Docker and copy it to target/x86_64-pc-windows-gnu/release/.
 # Usage: ./build.sh
-
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IMAGE="the-associate-builder"
-TARGET="x86_64-pc-windows-gnu"
-OUT="$SCRIPT_DIR/assoc.exe"
+OUT_DIR="$SCRIPT_DIR/target/x86_64-pc-windows-gnu/release"
 
-echo "Building Docker image..."
-docker build -t "$IMAGE" "$SCRIPT_DIR"
+mkdir -p "$OUT_DIR"
 
-echo "Extracting assoc.exe..."
-docker run --rm "$IMAGE" cat "target/$TARGET/release/assoc.exe" > "$OUT"
+echo "==> Building assoc-build image (builder stage)..."
+docker build -t assoc-build --target builder "$SCRIPT_DIR"
 
-echo "Done: $OUT"
+echo "==> Exporting assoc.exe to $OUT_DIR ..."
+DOCKER_BUILDKIT=1 docker build --target export \
+    --output "type=local,dest=$OUT_DIR" \
+    "$SCRIPT_DIR"
+
+echo "==> Done: $OUT_DIR/assoc.exe"

@@ -579,6 +579,7 @@
         <a href="#configuration" class="sidebar-link">Config File</a>
         <a href="#config-github" class="sidebar-link sub">GitHub</a>
         <a href="#config-jira" class="sidebar-link sub">Jira</a>
+        <a href="#config-linear" class="sidebar-link sub">Linear</a>
         <a href="#config-display" class="sidebar-link sub">Display</a>
       </div>
       <div class="sidebar-section">
@@ -599,6 +600,7 @@
         <a href="#tab-prs" class="sidebar-link sub">PRs</a>
         <a href="#tab-issues" class="sidebar-link sub">Issues</a>
         <a href="#tab-jira" class="sidebar-link sub">Jira</a>
+        <a href="#tab-linear" class="sidebar-link sub">Linear</a>
       </div>
       <div class="sidebar-section">
         <div class="sidebar-heading">Advanced</div>
@@ -771,6 +773,11 @@ state = "open"              <span class="comment"># "open", "closed", or "all"</
 project = "PROJ"             <span class="comment"># Jira project key for filtering issues</span>
 jql = "assignee = currentUser() AND resolution = Unresolved"
 
+[linear]
+api_key = "lin_api_..."      <span class="comment"># Linear personal API key (required)</span>
+username = "you@example.com" <span class="comment"># Your Linear email for My Tasks grouping</span>
+team = "BIT"                 <span class="comment"># Optional: filter to a specific team key</span>
+
 [display]
 tick_rate = 250              <span class="comment"># UI refresh interval in ms (default: 250)</span>
 tail_lines = 200             <span class="comment"># Lines to load from end of transcript (default: 200)</span></div>
@@ -819,6 +826,30 @@ tail_lines = 200             <span class="comment"># Lines to load from end of t
             <td><code>jira.jql</code></td>
             <td>String</td>
             <td>Custom JQL query for fetching issues. Overrides the default query.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 id="config-linear">Linear settings</h3>
+      <table class="config-table">
+        <thead>
+          <tr><th>Key</th><th>Type</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>linear.api_key</code></td>
+            <td>String</td>
+            <td>Your Linear API key. Required to enable the Linear tab. Generate one at <strong>Linear → Settings → API</strong>.</td>
+          </tr>
+          <tr>
+            <td><code>linear.username</code></td>
+            <td>String</td>
+            <td>Your Linear account email address. Used to separate issues into <strong>My Tasks</strong> (assigned to you) and <strong>Unassigned</strong> sections.</td>
+          </tr>
+          <tr>
+            <td><code>linear.team</code></td>
+            <td>String</td>
+            <td>Linear team key (e.g. <code>BIT</code>) to filter issues to a specific team. Optional — omit to show issues across all teams.</td>
           </tr>
         </tbody>
       </table>
@@ -913,7 +944,7 @@ tail_lines = 200             <span class="comment"># Lines to load from end of t
            ============================================================ -->
       <h2 id="tabs">Tabs Reference</h2>
 
-      <p>The Associate displays up to eight tabs. The first five are always visible; the PRs, Issues, and Jira tabs appear only when their respective CLI tools are detected and configured.</p>
+      <p>The Associate displays up to nine tabs. The first five are always visible; the PRs, Issues, Jira, and Linear tabs appear only when their respective tools are detected and configured.</p>
 
       <div class="callout callout-info">
         <p><strong>Pane pattern:</strong> Every tab uses a left/right pane layout. The left pane shows a list; the right pane shows detail for the selected item. Use <kbd>h</kbd>/<kbd>l</kbd> to switch between panes.</p>
@@ -998,6 +1029,20 @@ tail_lines = 200             <span class="comment"># Lines to load from end of t
           <li>Press <kbd>/</kbd> to search issues by text query. Press <kbd>Esc</kbd> to cancel search and return to the default view.</li>
           <li>Data is polled every 60 seconds. Press <kbd>r</kbd> to refresh manually, <kbd>o</kbd> to open in your browser.</li>
         </ul>
+      </div>
+
+      <div class="tab-card" id="tab-linear">
+        <h3 class="tab-card-title">9. Linear</h3>
+        <p>Displays Linear issues fetched from the Linear GraphQL API. Requires a <code>linear.api_key</code> in <code>.assoc.toml</code>. The tab appears automatically when an API key is configured.</p>
+        <ul>
+          <li>Issues are grouped into <strong>My Tasks</strong> (assigned to your configured email) and <strong>Unassigned</strong> sections, each sorted by workflow state (started first, then unstarted, then backlog).</li>
+          <li>The right pane shows full issue details: identifier, title, state, priority, assignee, team, labels, description, and URL.</li>
+          <li>Press <kbd>Enter</kbd> or <kbd>o</kbd> to open the selected issue in your browser.</li>
+          <li>Press <kbd>r</kbd> to refresh data from the Linear API. Data is polled every 60 seconds automatically.</li>
+        </ul>
+        <div class="callout callout-info">
+          <p>Configure <code>linear.username</code> with your Linear account email so that issues assigned to you are separated into the <strong>My Tasks</strong> section. Without it, only the <strong>Unassigned</strong> section is shown.</p>
+        </div>
       </div>
 
       <!-- ============================================================

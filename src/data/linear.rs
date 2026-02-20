@@ -4,8 +4,8 @@ use anyhow::Result;
 
 use crate::model::linear::{FlatLinearItem, LinearIssue};
 
-/// Fetch issues assigned to the authenticated user (viewer) from Linear's GraphQL API.
-/// If `username` is provided, filter by assignee email instead of using the viewer query.
+/// Fetch issues from Linear's GraphQL API.
+/// If `username` is provided, filter by assignee email.
 /// If `team_key` is provided, add a team filter.
 pub fn fetch_my_issues(
     api_key: &str,
@@ -70,15 +70,17 @@ pub fn fetch_my_issues(
         anyhow::bail!("curl failed: {}", stderr.trim());
     }
 
-    parse_response(&output.stdout, username.is_some())
+    parse_response(&output.stdout)
 }
 
 /// Build the GraphQL query string.
 fn build_query(username: Option<&str>, team_key: Option<&str>) -> String {
     let mut filters = Vec::new();
 
-    // Exclude completed and canceled issues
-    filters.push("state: { type: { nin: [\"completed\", \"canceled\"] } }".to_string());
+    // Exclude completed and cancelled issues
+    filters.push(
+        "state: { type: { nin: [\"completed\", \"cancelled\"] } }".to_string(),
+    );
 
     if let Some(team) = team_key {
         filters.push(format!("team: {{ key: {{ eq: \"{}\" }} }}", team));
@@ -86,23 +88,25 @@ fn build_query(username: Option<&str>, team_key: Option<&str>) -> String {
 
     let filter_str = filters.join(", ");
 
-    if let Some(email) = username {
-        // Use top-level issues query with assignee email filter
+    // When username is set, include issues assigned to that user OR unassigned.
+    // Without username, return all non-completed workspace issues.
+    let assignee_filter = if let Some(email) = username {
         format!(
-            r#"query {{ issues(filter: {{ assignee: {{ email: {{ eq: "{}" }} }}, {} }}, first: 50, orderBy: updatedAt) {{ nodes {{ identifier title description priority priorityLabel state {{ name type color }} assignee {{ name email }} labels {{ nodes {{ name color }} }} url team {{ name key }} createdAt updatedAt }} }} }}"#,
-            email, filter_str
+            r#", or: [{{ assignee: {{ email: {{ eq: "{}" }} }} }}, {{ assignee: {{ null: true }} }}]"#,
+            email
         )
     } else {
-        // Use viewer.assignedIssues for the authenticated user
-        format!(
-            r#"query {{ viewer {{ assignedIssues(filter: {{ {} }}, first: 50, orderBy: updatedAt) {{ nodes {{ identifier title description priority priorityLabel state {{ name type color }} assignee {{ name email }} labels {{ nodes {{ name color }} }} url team {{ name key }} createdAt updatedAt }} }} }} }}"#,
-            filter_str
-        )
-    }
+        String::new()
+    };
+
+    format!(
+        r#"query {{ issues(filter: {{ {}{} }}, first: 50, orderBy: updatedAt) {{ nodes {{ identifier title description priority priorityLabel state {{ name type color }} assignee {{ name email }} labels {{ nodes {{ name color }} }} url team {{ name key }} createdAt updatedAt }} }} }}"#,
+        filter_str, assignee_filter
+    )
 }
 
 /// Parse the GraphQL JSON response into a list of LinearIssues.
-fn parse_response(data: &[u8], used_issues_query: bool) -> Result<Vec<LinearIssue>> {
+fn parse_response(data: &[u8]) -> Result<Vec<LinearIssue>> {
     let value: serde_json::Value = serde_json::from_slice(data)?;
 
     // Check for GraphQL errors
@@ -116,13 +120,7 @@ fn parse_response(data: &[u8], used_issues_query: bool) -> Result<Vec<LinearIssu
         }
     }
 
-    let nodes = if used_issues_query {
-        // { data: { issues: { nodes: [...] } } }
-        value.pointer("/data/issues/nodes")
-    } else {
-        // { data: { viewer: { assignedIssues: { nodes: [...] } } } }
-        value.pointer("/data/viewer/assignedIssues/nodes")
-    };
+    let nodes = value.pointer("/data/issues/nodes");
 
     let nodes = nodes
         .and_then(|n| n.as_array())
@@ -136,37 +134,54 @@ fn parse_response(data: &[u8], used_issues_query: bool) -> Result<Vec<LinearIssu
     Ok(issues)
 }
 
-/// Group issues by workflow state into a flat list of headers and issues.
-/// Groups are ordered: "started" states first, then "unstarted", then "backlog".
-pub fn categorize_issues(issues: &[LinearIssue]) -> Vec<FlatLinearItem> {
-    let mut state_order: Vec<(String, String)> = Vec::new();
+/// Group issues into "My Tasks" (assigned to username) and "Unassigned" sections.
+/// Within each section issues are sorted by state: started → unstarted → backlog.
+/// If username is None, all assigned issues appear in "Assigned" and unassigned in "Unassigned".
+pub fn categorize_issues(issues: &[LinearIssue], username: Option<&str>) -> Vec<FlatLinearItem> {
+    let state_priority = |state_type: &str| -> u8 {
+        match state_type {
+            "started" => 0,
+            "unstarted" => 1,
+            "backlog" => 2,
+            _ => 3,
+        }
+    };
+
+    let mut my_tasks: Vec<&LinearIssue> = Vec::new();
+    let mut unassigned: Vec<&LinearIssue> = Vec::new();
+
     for issue in issues {
-        if !state_order
-            .iter()
-            .any(|(name, _)| name == &issue.state.name)
-        {
-            state_order.push((issue.state.name.clone(), issue.state.state_type.clone()));
+        match &issue.assignee {
+            None => unassigned.push(issue),
+            Some(assignee) => {
+                let is_mine = username.map_or(false, |user| {
+                    assignee.email.as_deref().map_or(false, |e| {
+                        e.to_lowercase() == user.to_lowercase()
+                    })
+                });
+                if is_mine {
+                    my_tasks.push(issue);
+                }
+            }
         }
     }
 
-    // Sort: started first, then unstarted, then backlog, then anything else
-    state_order.sort_by_key(|(_, state_type)| match state_type.as_str() {
-        "started" => 0,
-        "unstarted" => 1,
-        "backlog" => 2,
-        _ => 3,
-    });
+    my_tasks.sort_by_key(|i| state_priority(&i.state.state_type));
+    unassigned.sort_by_key(|i| state_priority(&i.state.state_type));
 
     let mut result = Vec::new();
-    for (state_name, state_type) in &state_order {
-        result.push(FlatLinearItem::StateHeader(
-            state_name.clone(),
-            state_type.clone(),
-        ));
-        for issue in issues {
-            if issue.state.name == *state_name {
-                result.push(FlatLinearItem::Issue(Box::new(issue.clone())));
-            }
+
+    if !my_tasks.is_empty() {
+        result.push(FlatLinearItem::AssignmentHeader("My Tasks".to_string()));
+        for issue in my_tasks {
+            result.push(FlatLinearItem::Issue(Box::new(issue.clone())));
+        }
+    }
+
+    if !unassigned.is_empty() {
+        result.push(FlatLinearItem::AssignmentHeader("Unassigned".to_string()));
+        for issue in unassigned {
+            result.push(FlatLinearItem::Issue(Box::new(issue.clone())));
         }
     }
 

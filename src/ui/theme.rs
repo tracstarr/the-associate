@@ -109,6 +109,7 @@ pub const ISSUE_SECTION: Style = Style::new().fg(Color::Cyan).add_modifier(Modif
 pub const ISSUE_COMMENT_AUTHOR: Style = Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD);
 
 // Linear
+pub const LINEAR_SECTION: Style = Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD);
 pub const LINEAR_URGENT: Style = Style::new().fg(Color::Red).add_modifier(Modifier::BOLD);
 pub const LINEAR_HIGH: Style = Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD);
 pub const LINEAR_MEDIUM: Style = Style::new().fg(Color::Blue);

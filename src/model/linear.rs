@@ -64,7 +64,7 @@ pub struct LinearTeam {
 
 #[derive(Debug, Clone)]
 pub enum FlatLinearItem {
-    StateHeader(String, String), // (state_name, state_type)
+    AssignmentHeader(String), // "My Tasks", "Unassigned"
     Issue(Box<LinearIssue>),
 }
 
