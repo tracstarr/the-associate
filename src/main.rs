@@ -108,7 +108,7 @@ TUI KEYBINDINGS:
   Ctrl+S / Esc       Save / cancel edit (file browser)
   n                  New issue (Issues tab)
   e                  Edit issue (Issues tab) / file (browser)
-  c                  Comment on issue (Issues tab)
+  c                  Comment (Issues) / Launch Claude (PRs / Jira)
   x                  Close/reopen issue (Issues tab)
   d / Del            Delete file (Sessions / Teams / Todos / Plans)
   o                  Open in browser (PRs / Issues / Jira / Linear)
@@ -319,6 +319,9 @@ fn run_app(
             if app.has_linear && app.linear_last_poll.elapsed() >= poll_interval {
                 app.load_linear_issues();
             }
+
+            // Poll spawned process output
+            app.poll_process_output();
         }
 
         if app.should_quit {
@@ -363,6 +366,12 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => app.cancel_delete(),
             _ => {}
         }
+        return;
+    }
+
+    // Prompt modal — pass keys to prompt editor
+    if app.show_prompt_modal {
+        handle_prompt_modal_key(app, key);
         return;
     }
 
@@ -497,12 +506,14 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             }
         }
 
-        // Comment on issue (Issues tab)
-        KeyCode::Char('c') => {
-            if app.active_tab == app::ActiveTab::GitHubIssues {
-                app.issues_start_comment();
+        // Comment (Issues tab) / Launch Claude Code (PRs / Jira)
+        KeyCode::Char('c') => match app.active_tab {
+            app::ActiveTab::GitHubIssues => app.issues_start_comment(),
+            app::ActiveTab::GitHubPRs | app::ActiveTab::Jira => {
+                app.open_prompt_modal_for_current();
             }
-        }
+            _ => {}
+        },
 
         // Close/reopen issue (Issues tab)
         KeyCode::Char('x') => {
@@ -585,6 +596,25 @@ fn handle_issues_edit_key(app: &mut App, key: KeyEvent) {
                         editor.input(key);
                     }
                 }
+            }
+        }
+    }
+}
+
+fn handle_prompt_modal_key(app: &mut App, key: KeyEvent) {
+    match key.code {
+        // Ctrl+Enter to confirm and launch
+        KeyCode::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.confirm_prompt_modal();
+        }
+        // Esc to cancel
+        KeyCode::Esc => {
+            app.cancel_prompt_modal();
+        }
+        // All other keys go to the TextArea editor
+        _ => {
+            if let Some(ref mut editor) = app.prompt_editor {
+                editor.input(key);
             }
         }
     }

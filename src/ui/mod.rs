@@ -7,6 +7,8 @@ pub mod jira_view;
 pub mod layout;
 pub mod linear_view;
 pub mod plans_view;
+pub mod processes_view;
+pub mod prompt_modal;
 pub mod sessions_view;
 pub mod tabs;
 pub mod teams_view;

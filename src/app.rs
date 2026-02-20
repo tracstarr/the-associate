@@ -1,11 +1,14 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::process::Child;
+use std::sync::mpsc;
 use std::time::Instant;
 
 use crate::config::{self, ProjectConfig};
 use crate::data::{
-    cli_detect, filebrowser, git, github, inboxes, jira, linear, path_encoding, plans, sessions,
-    subagents, tasks, teams, todos, transcripts,
+    cli_detect, filebrowser, git, github, inboxes, jira, linear, path_encoding, plans,
+    process_runner::{self, ProcessOutput},
+    prompt_builder, sessions, subagents, tasks, teams, todos, transcripts,
 };
 use crate::event::FileChange;
 use crate::model::agent_status::{self, AgentStatus};
@@ -16,6 +19,7 @@ use crate::model::inbox::InboxMessage;
 use crate::model::jira::{FlatJiraItem, JiraIssue, JiraTransition};
 use crate::model::linear::{FlatLinearItem, LinearIssue};
 use crate::model::plan::{MarkdownLine, PlanFile as PlanFileModel};
+use crate::model::process::{ProcessStatus, SpawnedProcess, TicketInfo};
 use crate::model::session::SessionEntry;
 use crate::model::task::Task;
 use crate::model::team::{Team, TeamMember};
@@ -33,6 +37,13 @@ pub enum ActiveTab {
     GitHubIssues,
     Jira,
     Linear,
+    Processes,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProcessesPane {
+    List,
+    Output,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -240,6 +251,22 @@ pub struct App {
     pub confirm_delete: bool,
     pub delete_target_name: String,
 
+    // Processes tab
+    pub has_claude: bool,
+    pub processes: Vec<SpawnedProcess>,
+    pub process_children: Vec<(usize, Child)>,
+    pub process_index: usize,
+    pub process_output_scroll: usize,
+    pub processes_pane: ProcessesPane,
+    pub process_tx: Option<mpsc::Sender<ProcessOutput>>,
+    pub process_rx: Option<mpsc::Receiver<ProcessOutput>>,
+    pub next_process_id: usize,
+
+    // Prompt modal
+    pub show_prompt_modal: bool,
+    pub prompt_editor: Option<tui_textarea::TextArea<'static>>,
+    pub prompt_ticket_info: Option<TicketInfo>,
+
     // Status
     pub last_update: Instant,
     pub last_error: Option<String>,
@@ -254,6 +281,7 @@ impl App {
         let has_gh = cli_detect::is_available("gh");
         let has_jira = cli_detect::is_available("acli");
         let has_linear = project_config.linear_api_key().is_some();
+        let has_claude = cli_detect::is_available("claude");
         // Config github.repo overrides git remote detection
         let gh_repo = project_config.github_repo().map(String::from).or_else(|| {
             if has_gh {
@@ -395,6 +423,20 @@ impl App {
             confirm_delete: false,
             delete_target_name: String::new(),
 
+            has_claude,
+            processes: Vec::new(),
+            process_children: Vec::new(),
+            process_index: 0,
+            process_output_scroll: 0,
+            processes_pane: ProcessesPane::List,
+            process_tx: None,
+            process_rx: None,
+            next_process_id: 1,
+
+            show_prompt_modal: false,
+            prompt_editor: None,
+            prompt_ticket_info: None,
+
             last_update: Instant::now(),
             last_error: None,
         }
@@ -420,6 +462,9 @@ impl App {
         }
         if self.has_linear {
             tabs.push(ActiveTab::Linear);
+        }
+        if !self.processes.is_empty() {
+            tabs.push(ActiveTab::Processes);
         }
         tabs
     }
@@ -910,6 +955,17 @@ impl App {
                     self.linear_detail_scroll = self.linear_detail_scroll.saturating_add(1);
                 }
             },
+            ActiveTab::Processes => match self.processes_pane {
+                ProcessesPane::List => {
+                    if !self.processes.is_empty() {
+                        self.process_index = (self.process_index + 1).min(self.processes.len() - 1);
+                        self.process_output_scroll = 0;
+                    }
+                }
+                ProcessesPane::Output => {
+                    self.process_output_scroll = self.process_output_scroll.saturating_add(1);
+                }
+            },
         }
     }
 
@@ -1020,6 +1076,15 @@ impl App {
                     self.linear_detail_scroll = self.linear_detail_scroll.saturating_sub(1);
                 }
             },
+            ActiveTab::Processes => match self.processes_pane {
+                ProcessesPane::List => {
+                    self.process_index = self.process_index.saturating_sub(1);
+                    self.process_output_scroll = 0;
+                }
+                ProcessesPane::Output => {
+                    self.process_output_scroll = self.process_output_scroll.saturating_sub(1);
+                }
+            },
         }
     }
 
@@ -1060,6 +1125,9 @@ impl App {
             }
             ActiveTab::Linear => {
                 self.linear_pane = LinearPane::List;
+            }
+            ActiveTab::Processes => {
+                self.processes_pane = ProcessesPane::List;
             }
         }
     }
@@ -1107,6 +1175,9 @@ impl App {
             ActiveTab::Linear => {
                 self.linear_pane = LinearPane::Detail;
             }
+            ActiveTab::Processes => {
+                self.processes_pane = ProcessesPane::Output;
+            }
         }
     }
 
@@ -1152,6 +1223,11 @@ impl App {
             ActiveTab::Linear => {
                 if self.linear_pane == LinearPane::List {
                     self.linear_open_selected();
+                }
+            }
+            ActiveTab::Processes => {
+                if self.processes_pane == ProcessesPane::List {
+                    self.processes_pane = ProcessesPane::Output;
                 }
             }
             _ => {}
@@ -1255,6 +1331,15 @@ impl App {
                 }
                 LinearPane::Detail => {
                     self.linear_detail_scroll = 0;
+                }
+            },
+            ActiveTab::Processes => match self.processes_pane {
+                ProcessesPane::List => {
+                    self.process_index = 0;
+                    self.process_output_scroll = 0;
+                }
+                ProcessesPane::Output => {
+                    self.process_output_scroll = 0;
                 }
             },
         }
@@ -1422,6 +1507,17 @@ impl App {
                 }
                 LinearPane::Detail => {
                     self.linear_detail_scroll = usize::MAX;
+                }
+            },
+            ActiveTab::Processes => match self.processes_pane {
+                ProcessesPane::List => {
+                    if !self.processes.is_empty() {
+                        self.process_index = self.processes.len() - 1;
+                        self.process_output_scroll = 0;
+                    }
+                }
+                ProcessesPane::Output => {
+                    self.process_output_scroll = usize::MAX;
                 }
             },
         }
@@ -2326,6 +2422,110 @@ impl App {
         }
     }
 
+    // --- Prompt modal helpers ---
+
+    /// Open the prompt modal for the currently selected ticket (GitHub PR or Jira issue).
+    pub fn open_prompt_modal_for_current(&mut self) {
+        if !self.has_claude {
+            self.last_error = Some("claude CLI not found on PATH".to_string());
+            return;
+        }
+
+        let ticket = match self.active_tab {
+            ActiveTab::GitHubPRs => self
+                .gh_selected_pr()
+                .map(prompt_builder::ticket_from_github_pr),
+            ActiveTab::Jira => self
+                .jira_selected_issue()
+                .map(prompt_builder::ticket_from_jira),
+            _ => None,
+        };
+
+        if let Some(ticket) = ticket {
+            let prompt = prompt_builder::build_default_prompt(&ticket);
+            let mut editor = tui_textarea::TextArea::default();
+            editor.insert_str(&prompt);
+            editor.move_cursor(tui_textarea::CursorMove::Top);
+            editor.move_cursor(tui_textarea::CursorMove::Head);
+
+            self.prompt_editor = Some(editor);
+            self.prompt_ticket_info = Some(ticket);
+            self.show_prompt_modal = true;
+        }
+    }
+
+    /// Confirm and launch the process from the prompt modal.
+    pub fn confirm_prompt_modal(&mut self) {
+        let prompt = if let Some(ref editor) = self.prompt_editor {
+            editor.lines().join("\n")
+        } else {
+            return;
+        };
+
+        let ticket = match self.prompt_ticket_info.take() {
+            Some(t) => t,
+            None => return,
+        };
+
+        self.show_prompt_modal = false;
+        self.prompt_editor = None;
+
+        self.spawn_claude_process(&ticket, &prompt);
+    }
+
+    /// Cancel and close the prompt modal.
+    pub fn cancel_prompt_modal(&mut self) {
+        self.show_prompt_modal = false;
+        self.prompt_editor = None;
+        self.prompt_ticket_info = None;
+    }
+
+    // --- Process management ---
+
+    /// Initialize the process output channel if not already created.
+    fn ensure_process_channel(&mut self) {
+        if self.process_tx.is_none() {
+            let (tx, rx) = mpsc::channel();
+            self.process_tx = Some(tx);
+            self.process_rx = Some(rx);
+        }
+    }
+
+    /// Spawn a new Claude Code process with the given prompt.
+    fn spawn_claude_process(&mut self, ticket: &TicketInfo, prompt: &str) {
+        self.ensure_process_channel();
+
+        let id = self.next_process_id;
+        self.next_process_id += 1;
+
+        let tx = self.process_tx.as_ref().unwrap().clone();
+        match process_runner::spawn_claude_headless(id, prompt, &self.project_cwd, tx) {
+            Ok(child) => {
+                let process = SpawnedProcess {
+                    id,
+                    label: ticket.key.clone(),
+                    title: ticket.title.clone(),
+                    source: ticket.source.clone(),
+                    status: ProcessStatus::Running,
+                    prompt: prompt.to_string(),
+                    cwd: self.project_cwd.clone(),
+                    output_lines: Vec::new(),
+                    error_lines: Vec::new(),
+                };
+                self.processes.push(process);
+                self.process_children.push((id, child));
+
+                // Auto-switch to Processes tab
+                self.active_tab = ActiveTab::Processes;
+                self.process_index = self.processes.len() - 1;
+                self.process_output_scroll = 0;
+            }
+            Err(e) => {
+                self.last_error = Some(format!("Failed to spawn claude: {}", e));
+            }
+        }
+    }
+
     fn linear_skip_to_next_issue(&mut self) {
         if self.linear_flat_list.is_empty() {
             return;
@@ -2386,5 +2586,73 @@ impl App {
                 cli_detect::open_url(&issue.url);
             }
         }
+    }
+
+    /// Poll for process output messages (called from the event loop).
+    pub fn poll_process_output(&mut self) {
+        let rx = match self.process_rx {
+            Some(ref rx) => rx,
+            None => return,
+        };
+
+        while let Ok(msg) = rx.try_recv() {
+            match msg {
+                ProcessOutput::Stdout(id, line) => {
+                    if let Some(proc) = self.processes.iter_mut().find(|p| p.id == id) {
+                        proc.output_lines.push(line);
+                    }
+                }
+                ProcessOutput::Stderr(id, line) => {
+                    if let Some(proc) = self.processes.iter_mut().find(|p| p.id == id) {
+                        proc.error_lines.push(line);
+                    }
+                }
+                ProcessOutput::Exited(id, success) => {
+                    if let Some(proc) = self.processes.iter_mut().find(|p| p.id == id) {
+                        proc.status = if success {
+                            ProcessStatus::Completed
+                        } else {
+                            ProcessStatus::Failed
+                        };
+                    }
+                    self.process_children.retain(|(pid, _)| *pid != id);
+                }
+            }
+        }
+
+        // Check for exited children
+        let mut exited = Vec::new();
+        for (id, child) in &mut self.process_children {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    exited.push((*id, status.success()));
+                }
+                Ok(None) => {} // still running
+                Err(_) => {
+                    exited.push((*id, false));
+                }
+            }
+        }
+        for (id, success) in exited {
+            if let Some(proc) = self.processes.iter_mut().find(|p| p.id == id) {
+                if proc.status == ProcessStatus::Running {
+                    proc.status = if success {
+                        ProcessStatus::Completed
+                    } else {
+                        ProcessStatus::Failed
+                    };
+                }
+            }
+            self.process_children.retain(|(pid, _)| *pid != id);
+        }
+    }
+
+    /// Get the currently selected process.
+    pub fn selected_process(&self) -> Option<&SpawnedProcess> {
+        if self.processes.is_empty() {
+            return None;
+        }
+        let idx = self.process_index.min(self.processes.len() - 1);
+        Some(&self.processes[idx])
     }
 }
