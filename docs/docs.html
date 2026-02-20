@@ -681,10 +681,6 @@ cargo build --release</div>
       <p>The binary will be at <code>target/release/assoc.exe</code>. Copy it to a directory on your PATH for easy access.</p>
 
       <div class="callout callout-info">
-        <p><strong>MSYS2 users:</strong> A bash install script is included for convenience. Run <code>./install.sh</code> to build and install to <code>~/.local/bin</code>. It also supports <code>./install.sh update</code> (pull + rebuild) and <code>./install.sh uninstall</code>.</p>
-      </div>
-
-      <div class="callout callout-info">
         <p><strong>Note:</strong> The release profile uses <code>strip = true</code>, <code>lto = true</code>, and <code>opt-level = "z"</code> for a small, optimized binary.</p>
       </div>
 

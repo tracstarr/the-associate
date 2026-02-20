@@ -57,8 +57,6 @@ cargo build --release
 
 The binary will be at `target/release/assoc.exe`. Copy it to a directory on your PATH for easy access.
 
-> **MSYS2 users:** A bash install script is included for convenience. Run `./install.sh` to build and install to `~/.local/bin`. It also supports `./install.sh update` (pull + rebuild) and `./install.sh uninstall`.
-
 > **Note:** The release profile uses `strip = true`, `lto = true`, and `opt-level = "z"` for a small, optimized binary.
 
 ## Usage
