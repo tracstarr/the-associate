@@ -236,6 +236,10 @@ pub struct App {
     pub linear_detail_scroll: usize,
     pub linear_last_poll: Instant,
 
+    // Delete confirmation
+    pub confirm_delete: bool,
+    pub delete_target_name: String,
+
     // Status
     pub last_update: Instant,
     pub last_error: Option<String>,
@@ -387,6 +391,9 @@ impl App {
             linear_pane: LinearPane::List,
             linear_detail_scroll: 0,
             linear_last_poll: Instant::now(),
+
+            confirm_delete: false,
+            delete_target_name: String::new(),
 
             last_update: Instant::now(),
             last_error: None,
@@ -1690,6 +1697,152 @@ impl App {
     pub fn fb_cancel_edit(&mut self) {
         self.fb_editing = false;
         self.fb_editor = None;
+    }
+
+    // --- Delete helpers ---
+
+    /// Show the delete confirmation dialog for the currently selected item.
+    pub fn request_delete(&mut self) {
+        let name = match self.active_tab {
+            ActiveTab::Todos => {
+                if !self.todos_pane_left || self.todo_files.is_empty() {
+                    return;
+                }
+                let idx = self.todo_file_index.min(self.todo_files.len() - 1);
+                self.todo_files[idx].filename.clone()
+            }
+            ActiveTab::Plans => {
+                if self.plans_pane != PlansPane::List || self.plan_files.is_empty() {
+                    return;
+                }
+                let idx = self.plan_file_index.min(self.plan_files.len() - 1);
+                self.plan_files[idx].filename.clone()
+            }
+            ActiveTab::Sessions => {
+                if self.sessions_pane != SessionsPane::List || self.sessions.is_empty() {
+                    return;
+                }
+                let idx = self.session_list_index.min(self.sessions.len() - 1);
+                let session = &self.sessions[idx];
+                format!("{}.jsonl", session.session_id)
+            }
+            ActiveTab::Teams => {
+                if self.teams_pane != TeamsPane::Teams || self.teams.is_empty() {
+                    return;
+                }
+                let idx = self.team_list_index.min(self.teams.len() - 1);
+                self.teams[idx].display_name().to_string()
+            }
+            _ => return,
+        };
+        self.delete_target_name = name;
+        self.confirm_delete = true;
+    }
+
+    /// Execute the delete after confirmation.
+    pub fn execute_delete(&mut self) {
+        self.confirm_delete = false;
+        match self.active_tab {
+            ActiveTab::Todos => self.delete_selected_todo(),
+            ActiveTab::Plans => self.delete_selected_plan(),
+            ActiveTab::Sessions => self.delete_selected_session(),
+            ActiveTab::Teams => self.delete_selected_team(),
+            _ => {}
+        }
+    }
+
+    /// Cancel the delete confirmation.
+    pub fn cancel_delete(&mut self) {
+        self.confirm_delete = false;
+        self.delete_target_name.clear();
+    }
+
+    fn delete_selected_todo(&mut self) {
+        if self.todo_files.is_empty() {
+            return;
+        }
+        let idx = self.todo_file_index.min(self.todo_files.len() - 1);
+        let filename = &self.todo_files[idx].filename;
+        let path = self.claude_home.join("todos").join(filename);
+        if let Err(e) = std::fs::remove_file(&path) {
+            self.last_error = Some(format!("Delete todo: {}", e));
+            return;
+        }
+        self.load_todos();
+        if self.todo_file_index > 0 && self.todo_file_index >= self.todo_files.len() {
+            self.todo_file_index = self.todo_files.len().saturating_sub(1);
+        }
+        self.todo_item_index = 0;
+    }
+
+    fn delete_selected_plan(&mut self) {
+        if self.plan_files.is_empty() {
+            return;
+        }
+        let idx = self.plan_file_index.min(self.plan_files.len() - 1);
+        let filename = &self.plan_files[idx].filename;
+        let path = self.claude_home.join("plans").join(filename);
+        if let Err(e) = std::fs::remove_file(&path) {
+            self.last_error = Some(format!("Delete plan: {}", e));
+            return;
+        }
+        self.load_plans();
+        if self.plan_file_index > 0 && self.plan_file_index >= self.plan_files.len() {
+            self.plan_file_index = self.plan_files.len().saturating_sub(1);
+        }
+        self.plan_content_scroll = 0;
+    }
+
+    fn delete_selected_session(&mut self) {
+        if self.sessions.is_empty() {
+            return;
+        }
+        let idx = self.session_list_index.min(self.sessions.len() - 1);
+        let session_id = self.sessions[idx].session_id.clone();
+        let project_dir = self
+            .claude_home
+            .join("projects")
+            .join(&self.encoded_project);
+        let path = project_dir.join(format!("{}.jsonl", session_id));
+        if let Err(e) = std::fs::remove_file(&path) {
+            self.last_error = Some(format!("Delete session: {}", e));
+            return;
+        }
+        // Clear loaded transcript if it was the deleted session
+        if self.loaded_session_id.as_deref() == Some(&session_id) {
+            self.loaded_session_id = None;
+            self.transcript_items.clear();
+            self.transcript_scroll = 0;
+            self.subagents.clear();
+            self.subagent_transcript.clear();
+            self.viewing_subagent = false;
+        }
+        self.load_sessions();
+        if self.session_list_index > 0 && self.session_list_index >= self.sessions.len() {
+            self.session_list_index = self.sessions.len().saturating_sub(1);
+        }
+    }
+
+    fn delete_selected_team(&mut self) {
+        if self.teams.is_empty() {
+            return;
+        }
+        let idx = self.team_list_index.min(self.teams.len() - 1);
+        let dir_name = self.teams[idx].dir_name.clone();
+        let team_dir = self.claude_home.join("teams").join(&dir_name);
+        if let Err(e) = std::fs::remove_dir_all(&team_dir) {
+            self.last_error = Some(format!("Delete team: {}", e));
+            return;
+        }
+        self.load_teams();
+        if self.team_list_index > 0 && self.team_list_index >= self.teams.len() {
+            self.team_list_index = self.teams.len().saturating_sub(1);
+        }
+        self.member_list_index = 0;
+        self.task_list_index = 0;
+        self.detail_scroll = 0;
+        self.load_tasks_for_selected_team();
+        self.compute_agent_statuses();
     }
 
     // --- GitHub PR helpers ---

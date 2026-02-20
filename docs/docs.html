@@ -934,6 +934,9 @@ tail_lines = 200             <span class="comment"># Lines to load from end of t
           <tr><td><kbd>e</kbd></td><td>Issues</td><td>Edit the selected issue's title and body</td></tr>
           <tr><td><kbd>c</kbd></td><td>Issues</td><td>Add a comment to the selected issue</td></tr>
           <tr><td><kbd>x</kbd></td><td>Issues</td><td>Close or reopen the selected issue</td></tr>
+          <tr><td><kbd>d</kbd> / <kbd>Del</kbd></td><td>Sessions / Teams / Todos / Plans</td><td>Delete the selected item (shows confirmation prompt)</td></tr>
+          <tr><td><kbd>y</kbd></td><td>Sessions / Teams / Todos / Plans</td><td>Confirm deletion when the prompt is active</td></tr>
+          <tr><td><kbd>n</kbd> / <kbd>Esc</kbd></td><td>Sessions / Teams / Todos / Plans</td><td>Cancel deletion prompt</td></tr>
           <tr><td><kbd>t</kbd></td><td>Jira</td><td>Show available status transitions for selected issue</td></tr>
           <tr><td><kbd>/</kbd></td><td>Jira</td><td>Enter search mode (type query, press Enter to search, Esc to cancel)</td></tr>
         </tbody>
@@ -957,6 +960,7 @@ tail_lines = 200             <span class="comment"># Lines to load from end of t
           <li><strong>Follow mode</strong> (<kbd>f</kbd>) &mdash; When active, the transcript auto-scrolls to the latest output as Claude Code writes to the session file. Scrolling up manually disables follow mode; pressing <kbd>G</kbd> re-enables it.</li>
           <li><strong>Subagent cycling</strong> (<kbd>s</kbd>) &mdash; If the session has spawned subagents (team members), press <kbd>s</kbd> to cycle through their individual transcripts. Press <kbd>s</kbd> again past the last subagent to return to the main transcript.</li>
           <li><strong>Incremental loading</strong> &mdash; Only the last 200 lines (configurable via <code>display.tail_lines</code>) are loaded initially. New lines are read incrementally as they appear.</li>
+          <li><strong>Delete</strong> (<kbd>d</kbd> / <kbd>Del</kbd>) &mdash; Deletes the selected session's <code>.jsonl</code> transcript file from disk. A confirmation prompt appears; press <kbd>y</kbd> to confirm or <kbd>n</kbd> / <kbd>Esc</kbd> to cancel.</li>
         </ul>
       </div>
 
@@ -968,12 +972,16 @@ tail_lines = 200             <span class="comment"># Lines to load from end of t
           <li><strong>Members pane</strong> &mdash; Shows team members with their current status (starting, working, idle, shutdown). Lead agents are indicated.</li>
           <li><strong>Tasks pane</strong> &mdash; Lists all tasks for the selected team, color-coded by status (pending, in progress, completed).</li>
           <li><strong>Detail pane</strong> &mdash; Shows task details or inbox messages for the selected member.</li>
+          <li><strong>Delete</strong> (<kbd>d</kbd> / <kbd>Del</kbd>) &mdash; Removes the selected team's directory from <code>~/.claude/teams/</code>. A confirmation prompt appears; press <kbd>y</kbd> to confirm or <kbd>n</kbd> / <kbd>Esc</kbd> to cancel.</li>
         </ul>
       </div>
 
       <div class="tab-card" id="tab-todos">
         <h3 class="tab-card-title">3. Todos</h3>
         <p>Aggregates all todo files from <code>~/.claude/todos/</code> into a unified view. Left pane lists todo files; right pane shows the individual items within the selected file.</p>
+        <ul>
+          <li><strong>Delete</strong> (<kbd>d</kbd> / <kbd>Del</kbd>) &mdash; Deletes the selected <code>.json</code> todo file from <code>~/.claude/todos/</code>. A confirmation prompt appears; press <kbd>y</kbd> to confirm or <kbd>n</kbd> / <kbd>Esc</kbd> to cancel.</li>
+        </ul>
       </div>
 
       <div class="tab-card" id="tab-git">
@@ -988,6 +996,9 @@ tail_lines = 200             <span class="comment"># Lines to load from end of t
       <div class="tab-card" id="tab-plans">
         <h3 class="tab-card-title">5. Plans</h3>
         <p>Displays plan files from <code>~/.claude/</code>. Left pane lists available plan files; right pane renders the markdown content with syntax-aware formatting (headings, code blocks).</p>
+        <ul>
+          <li><strong>Delete</strong> (<kbd>d</kbd> / <kbd>Del</kbd>) &mdash; Deletes the selected <code>.md</code> plan file from disk. A confirmation prompt appears; press <kbd>y</kbd> to confirm or <kbd>n</kbd> / <kbd>Esc</kbd> to cancel.</li>
+        </ul>
       </div>
 
       <div class="tab-card" id="tab-prs">
