@@ -1,4 +1,8 @@
+use std::collections::VecDeque;
 use std::path::PathBuf;
+
+/// Maximum number of output/error lines retained per process.
+pub const MAX_PROCESS_OUTPUT_LINES: usize = 10_000;
 
 /// Represents a Claude Code process spawned from a ticket.
 #[derive(Debug, Clone)]
@@ -17,10 +21,10 @@ pub struct SpawnedProcess {
     pub prompt: String,
     /// Working directory where the process was spawned.
     pub cwd: PathBuf,
-    /// Captured stdout lines (raw, kept for debug).
-    pub output_lines: Vec<String>,
-    /// Captured stderr lines.
-    pub error_lines: Vec<String>,
+    /// Captured stdout lines (raw, kept for debug). Capped at MAX_PROCESS_OUTPUT_LINES.
+    pub output_lines: VecDeque<String>,
+    /// Captured stderr lines. Capped at MAX_PROCESS_OUTPUT_LINES.
+    pub error_lines: VecDeque<String>,
     /// Session ID extracted from stream-json init event.
     pub session_id: Option<String>,
     /// Human-readable parsed progress lines for the UI.

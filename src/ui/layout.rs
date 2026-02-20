@@ -1,5 +1,4 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui::Frame;
@@ -106,18 +105,12 @@ fn draw_delete_confirm(f: &mut Frame, area: Rect, name: &str) {
         Line::from(""),
         Line::from(Span::styled(
             format!("  Delete {}?", display_name),
-            Style::new().fg(Color::Red).add_modifier(Modifier::BOLD),
+            theme::DELETE_CONFIRM,
         )),
         Line::from(vec![
-            Span::styled(
-                "  y",
-                Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-            ),
+            Span::styled("  y", theme::HELP_KEY),
             Span::raw(" yes  "),
-            Span::styled(
-                "n",
-                Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-            ),
+            Span::styled("n", theme::HELP_KEY),
             Span::raw(" no"),
         ]),
     ];
@@ -125,7 +118,7 @@ fn draw_delete_confirm(f: &mut Frame, area: Rect, name: &str) {
     let block = Block::default()
         .title(" Confirm Delete ")
         .borders(Borders::ALL)
-        .border_style(Style::new().fg(Color::Red));
+        .border_style(theme::DELETE_CONFIRM_BORDER);
 
     let paragraph = Paragraph::new(lines).block(block);
     f.render_widget(paragraph, popup_area);
@@ -241,9 +234,7 @@ fn draw_status_bar(f: &mut Frame, area: Rect, app: &App) {
     if let Some(ref err) = app.last_error {
         left_spans.push(Span::styled(
             format!(" ERR: {} ", err),
-            ratatui::style::Style::new()
-                .fg(ratatui::style::Color::Red)
-                .bg(ratatui::style::Color::DarkGray),
+            theme::ERROR_DISPLAY,
         ));
     }
 
@@ -254,33 +245,15 @@ fn draw_status_bar(f: &mut Frame, area: Rect, app: &App) {
 
     // Browse mode indicator (Git tab)
     if app.active_tab == ActiveTab::Git && app.git_mode == GitMode::Browse {
-        left_spans.push(Span::styled(
-            " BROWSE ",
-            ratatui::style::Style::new()
-                .fg(ratatui::style::Color::Black)
-                .bg(ratatui::style::Color::Yellow)
-                .add_modifier(ratatui::style::Modifier::BOLD),
-        ));
+        left_spans.push(Span::styled(" BROWSE ", theme::MODE_BADGE_BROWSE));
         if app.fb_editing {
-            left_spans.push(Span::styled(
-                " EDIT ",
-                ratatui::style::Style::new()
-                    .fg(ratatui::style::Color::Black)
-                    .bg(ratatui::style::Color::Red)
-                    .add_modifier(ratatui::style::Modifier::BOLD),
-            ));
+            left_spans.push(Span::styled(" EDIT ", theme::MODE_BADGE_EDIT));
         }
     }
 
     // Issues edit mode indicator
     if app.active_tab == ActiveTab::GitHubIssues && app.gh_issues_editing {
-        left_spans.push(Span::styled(
-            " EDIT ",
-            ratatui::style::Style::new()
-                .fg(ratatui::style::Color::Black)
-                .bg(ratatui::style::Color::Yellow)
-                .add_modifier(ratatui::style::Modifier::BOLD),
-        ));
+        left_spans.push(Span::styled(" EDIT ", theme::MODE_BADGE_BROWSE));
     }
 
     // Pane send status
@@ -292,13 +265,7 @@ fn draw_status_bar(f: &mut Frame, area: Rect, app: &App) {
 
     // Jira search mode indicator
     if app.active_tab == ActiveTab::Jira && app.jira_search_mode {
-        left_spans.push(Span::styled(
-            " SEARCH ",
-            ratatui::style::Style::new()
-                .fg(ratatui::style::Color::Black)
-                .bg(ratatui::style::Color::Yellow)
-                .add_modifier(ratatui::style::Modifier::BOLD),
-        ));
+        left_spans.push(Span::styled(" SEARCH ", theme::MODE_BADGE_SEARCH));
     }
 
     // Build right-aligned hint spans

@@ -4,15 +4,9 @@ use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wra
 use ratatui::Frame;
 
 use super::theme;
+use super::util::truncate_chars;
 use crate::app::{App, SessionsPane};
 use crate::model::transcript::TranscriptItemKind;
-
-fn truncate_chars(s: &str, max_chars: usize) -> &str {
-    match s.char_indices().nth(max_chars) {
-        Some((idx, _)) => &s[..idx],
-        None => s,
-    }
-}
 
 pub fn draw_sessions(f: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()
@@ -110,10 +104,17 @@ fn draw_transcript(f: &mut Frame, area: Rect, app: &App) {
         theme::BORDER_INACTIVE
     };
 
-    // Build title showing session name
-    let session_title = if let Some(ref session) = app.sessions.get(app.session_list_index) {
-        let raw = session.display_title();
-        truncate_chars(&raw, 30).to_string()
+    // Build title showing session name — use loaded_session_id (not list index)
+    // so the title matches the transcript actually being displayed.
+    let session_title = if let Some(ref loaded_id) = app.loaded_session_id {
+        app.sessions
+            .iter()
+            .find(|s| s.session_id == *loaded_id)
+            .map(|s| {
+                let raw = s.display_title();
+                truncate_chars(&raw, 30).to_string()
+            })
+            .unwrap_or_default()
     } else {
         String::new()
     };
@@ -221,8 +222,8 @@ fn draw_transcript_content(
     let scroll_offset = if app.follow_mode && !app.viewing_subagent {
         total.saturating_sub(inner_height)
     } else if app.viewing_subagent {
-        // For subagent transcripts, start at top (no follow mode)
-        0
+        app.subagent_scroll
+            .min(total.saturating_sub(inner_height))
     } else {
         app.transcript_scroll
             .min(total.saturating_sub(inner_height))

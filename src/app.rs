@@ -153,6 +153,7 @@ pub struct App {
     pub subagent_transcript: Vec<TranscriptItem>,
     pub subagent_reader: transcripts::TranscriptReader,
     pub viewing_subagent: bool,
+    pub subagent_scroll: usize,
 
     // Teams tab
     pub teams: Vec<Team>,
@@ -259,6 +260,7 @@ pub struct App {
     pub process_index: usize,
     pub process_output_scroll: usize,
     pub processes_pane: ProcessesPane,
+    pub process_follow: bool,
     pub process_tx: Option<mpsc::Sender<ProcessOutput>>,
     pub process_rx: Option<mpsc::Receiver<ProcessOutput>>,
     pub next_process_id: usize,
@@ -288,6 +290,9 @@ pub struct App {
     // Status
     pub last_update: Instant,
     pub last_error: Option<String>,
+
+    // Dirty flag for redraw optimization
+    pub dirty: bool,
 }
 
 impl App {
@@ -354,6 +359,7 @@ impl App {
             subagent_transcript: Vec::new(),
             subagent_reader: transcripts::TranscriptReader::with_tail_lines(tail_lines),
             viewing_subagent: false,
+            subagent_scroll: 0,
 
             teams: Vec::new(),
             team_list_index: 0,
@@ -456,6 +462,7 @@ impl App {
             process_index: 0,
             process_output_scroll: 0,
             processes_pane: ProcessesPane::List,
+            process_follow: true,
             process_tx: None,
             process_rx: None,
             next_process_id: 1,
@@ -471,6 +478,8 @@ impl App {
 
             last_update: Instant::now(),
             last_error: None,
+
+            dirty: true,
         };
 
         // Detect current issue from branch name or directory name
@@ -674,6 +683,7 @@ impl App {
         self.subagent_reader =
             transcripts::TranscriptReader::with_tail_lines(self.project_config.tail_lines());
         self.viewing_subagent = false;
+        self.subagent_scroll = 0;
     }
 
     pub fn refresh_transcript(&mut self) {
@@ -685,14 +695,18 @@ impl App {
             let transcript_path = project_dir.join(format!("{}.jsonl", session_id));
 
             match self.transcript_reader.read_new(&transcript_path) {
-                Ok(true) => {
+                Ok((true, drained)) => {
                     self.transcript_items = self.transcript_reader.items.clone();
                     if self.follow_mode {
                         self.transcript_scroll = self.transcript_items.len();
+                    } else if drained > 0 {
+                        // Adjust scroll position so the user stays at the same content
+                        self.transcript_scroll =
+                            self.transcript_scroll.saturating_sub(drained);
                     }
                     self.last_update = Instant::now();
                 }
-                Ok(false) => {}
+                Ok((false, _)) => {}
                 Err(e) => {
                     self.last_error = Some(format!("Transcript update: {}", e));
                 }
@@ -704,7 +718,21 @@ impl App {
         match teams::load_teams(&self.claude_home, Some(&self.project_cwd)) {
             Ok(t) => {
                 self.teams = t;
+                // Clamp indices after reload in case the list shrunk
+                if self.team_list_index >= self.teams.len() {
+                    self.team_list_index = self.teams.len().saturating_sub(1);
+                    self.member_list_index = 0;
+                    self.task_list_index = 0;
+                }
                 self.load_tasks_for_selected_team();
+                // Clamp member and task indices against the reloaded data
+                let member_count = self.current_team_members().len();
+                if self.member_list_index >= member_count {
+                    self.member_list_index = member_count.saturating_sub(1);
+                }
+                if self.task_list_index >= self.tasks.len() {
+                    self.task_list_index = self.tasks.len().saturating_sub(1);
+                }
                 self.compute_agent_statuses();
                 self.last_error = None;
             }
@@ -777,7 +805,7 @@ impl App {
             return;
         }
         let team_idx = self.team_list_index.min(self.teams.len() - 1);
-        let team_name = &self.teams[team_idx].dir_name;
+        let team_name = self.teams[team_idx].dir_name.clone();
 
         let members = self.current_team_members();
         if members.is_empty() {
@@ -785,9 +813,9 @@ impl App {
             return;
         }
         let member_idx = self.member_list_index.min(members.len() - 1);
-        let agent_name = &members[member_idx].name;
+        let agent_name = members[member_idx].name.clone();
 
-        match inboxes::load_inbox(&self.claude_home, team_name, agent_name) {
+        match inboxes::load_inbox(&self.claude_home, &team_name, &agent_name) {
             Ok(msgs) => self.inbox_messages = msgs,
             Err(_) => self.inbox_messages = Vec::new(),
         }
@@ -799,6 +827,11 @@ impl App {
                 self.plan_files = p;
                 if !self.plan_files.is_empty() && self.plan_file_index >= self.plan_files.len() {
                     self.plan_file_index = self.plan_files.len() - 1;
+                }
+                // Clamp scroll position to the new content's line count
+                let line_count = self.current_plan_lines().len();
+                if self.plan_content_scroll > line_count {
+                    self.plan_content_scroll = line_count.saturating_sub(1);
                 }
                 self.last_error = None;
             }
@@ -820,9 +853,16 @@ impl App {
         match todos::load_todos(&self.claude_home) {
             Ok(t) => {
                 self.todo_files = t;
+                if self.todo_file_index >= self.todo_files.len() {
+                    self.todo_file_index = self.todo_files.len().saturating_sub(1);
+                    self.todo_item_index = 0;
+                }
                 self.last_error = None;
             }
             Err(e) => {
+                self.todo_files.clear();
+                self.todo_file_index = 0;
+                self.todo_item_index = 0;
                 self.last_error = Some(format!("Todos: {}", e));
             }
         }
@@ -848,6 +888,7 @@ impl App {
             }
         }
 
+        self.subagent_scroll = 0;
         self.load_subagent_transcript();
     }
 
@@ -876,10 +917,13 @@ impl App {
         }
         let path = self.subagents[self.subagent_index].path.clone();
         match self.subagent_reader.read_new(&path) {
-            Ok(true) => {
+            Ok((true, drained)) => {
                 self.subagent_transcript = self.subagent_reader.items.clone();
+                if drained > 0 {
+                    self.subagent_scroll = self.subagent_scroll.saturating_sub(drained);
+                }
             }
-            Ok(false) => {}
+            Ok((false, _)) => {}
             Err(e) => {
                 self.last_error = Some(format!("Subagent update: {}", e));
             }
@@ -1020,11 +1064,18 @@ impl App {
                     }
                 }
                 SessionsPane::Transcript => {
-                    self.follow_mode = false;
-                    self.transcript_scroll = self
-                        .transcript_scroll
-                        .saturating_add(1)
-                        .min(self.transcript_items.len().saturating_sub(1));
+                    if self.viewing_subagent {
+                        self.subagent_scroll = self
+                            .subagent_scroll
+                            .saturating_add(1)
+                            .min(self.subagent_transcript.len().saturating_sub(1));
+                    } else {
+                        self.follow_mode = false;
+                        self.transcript_scroll = self
+                            .transcript_scroll
+                            .saturating_add(1)
+                            .min(self.transcript_items.len().saturating_sub(1));
+                    }
                 }
             },
             ActiveTab::Teams => match self.teams_pane {
@@ -1151,8 +1202,12 @@ impl App {
                     self.session_list_index = self.session_list_index.saturating_sub(1);
                 }
                 SessionsPane::Transcript => {
-                    self.follow_mode = false;
-                    self.transcript_scroll = self.transcript_scroll.saturating_sub(1);
+                    if self.viewing_subagent {
+                        self.subagent_scroll = self.subagent_scroll.saturating_sub(1);
+                    } else {
+                        self.follow_mode = false;
+                        self.transcript_scroll = self.transcript_scroll.saturating_sub(1);
+                    }
                 }
             },
             ActiveTab::Teams => match self.teams_pane {
@@ -1257,6 +1312,7 @@ impl App {
                     self.process_output_scroll = 0;
                 }
                 ProcessesPane::Output => {
+                    self.process_follow = false;
                     self.process_output_scroll = self.process_output_scroll.saturating_sub(1);
                 }
             },
@@ -1269,12 +1325,16 @@ impl App {
                 self.sessions_pane = SessionsPane::List;
             }
             ActiveTab::Teams => {
+                let was_detail = self.teams_pane == TeamsPane::Detail;
                 self.teams_pane = match self.teams_pane {
                     TeamsPane::Detail => TeamsPane::Tasks,
                     TeamsPane::Tasks => TeamsPane::Members,
                     TeamsPane::Members => TeamsPane::Teams,
                     TeamsPane::Teams => TeamsPane::Teams,
                 };
+                if was_detail {
+                    self.detail_scroll = 0;
+                }
             }
             ActiveTab::Todos => {
                 self.todos_pane_left = true;
@@ -1414,8 +1474,12 @@ impl App {
             ActiveTab::Sessions => match self.sessions_pane {
                 SessionsPane::List => self.session_list_index = 0,
                 SessionsPane::Transcript => {
-                    self.follow_mode = false;
-                    self.transcript_scroll = 0;
+                    if self.viewing_subagent {
+                        self.subagent_scroll = 0;
+                    } else {
+                        self.follow_mode = false;
+                        self.transcript_scroll = 0;
+                    }
                 }
             },
             ActiveTab::Teams => match self.teams_pane {
@@ -1529,8 +1593,12 @@ impl App {
                     }
                 }
                 SessionsPane::Transcript => {
-                    self.follow_mode = true;
-                    self.transcript_scroll = self.transcript_items.len();
+                    if self.viewing_subagent {
+                        self.subagent_scroll = self.subagent_transcript.len();
+                    } else {
+                        self.follow_mode = true;
+                        self.transcript_scroll = self.transcript_items.len();
+                    }
                 }
             },
             ActiveTab::Teams => match self.teams_pane {
@@ -1586,10 +1654,13 @@ impl App {
                         GitPane::Files => {
                             if !self.git_flat_list.is_empty() {
                                 self.git_file_index = self.git_flat_list.len() - 1;
-                                while self.git_file_index > 0
-                                    && !self.git_flat_list[self.git_file_index].is_file()
-                                {
-                                    self.git_file_index -= 1;
+                                while self.git_file_index > 0 {
+                                    match self.git_flat_list.get(self.git_file_index) {
+                                        Some(item) if !item.is_file() => {
+                                            self.git_file_index -= 1
+                                        }
+                                        _ => break,
+                                    }
                                 }
                                 self.load_selected_diff();
                             }
@@ -1616,13 +1687,15 @@ impl App {
                     if !self.gh_flat_list.is_empty() {
                         self.gh_pr_index = self.gh_flat_list.len() - 1;
                         // Walk backward to find last PR entry
-                        while self.gh_pr_index > 0
-                            && matches!(
-                                self.gh_flat_list[self.gh_pr_index],
-                                FlatPrItem::SectionHeader(_)
-                            )
-                        {
-                            self.gh_pr_index -= 1;
+                        while self.gh_pr_index > 0 {
+                            match self.gh_flat_list.get(self.gh_pr_index) {
+                                Some(item)
+                                    if matches!(item, FlatPrItem::SectionHeader(_)) =>
+                                {
+                                    self.gh_pr_index -= 1
+                                }
+                                _ => break,
+                            }
                         }
                     }
                 }
@@ -1634,13 +1707,15 @@ impl App {
                 IssuesPane::List => {
                     if !self.gh_issues_flat_list.is_empty() {
                         self.gh_issues_index = self.gh_issues_flat_list.len() - 1;
-                        while self.gh_issues_index > 0
-                            && matches!(
-                                self.gh_issues_flat_list[self.gh_issues_index],
-                                FlatIssueItem::SectionHeader(_)
-                            )
-                        {
-                            self.gh_issues_index -= 1;
+                        while self.gh_issues_index > 0 {
+                            match self.gh_issues_flat_list.get(self.gh_issues_index) {
+                                Some(item)
+                                    if matches!(item, FlatIssueItem::SectionHeader(_)) =>
+                                {
+                                    self.gh_issues_index -= 1
+                                }
+                                _ => break,
+                            }
                         }
                     }
                 }
@@ -1652,13 +1727,15 @@ impl App {
                 JiraPane::List => {
                     if !self.jira_flat_list.is_empty() {
                         self.jira_index = self.jira_flat_list.len() - 1;
-                        while self.jira_index > 0
-                            && matches!(
-                                self.jira_flat_list[self.jira_index],
-                                FlatJiraItem::StatusHeader(_, _)
-                            )
-                        {
-                            self.jira_index -= 1;
+                        while self.jira_index > 0 {
+                            match self.jira_flat_list.get(self.jira_index) {
+                                Some(item)
+                                    if matches!(item, FlatJiraItem::StatusHeader(_, _)) =>
+                                {
+                                    self.jira_index -= 1
+                                }
+                                _ => break,
+                            }
                         }
                     }
                 }
@@ -1670,13 +1747,15 @@ impl App {
                 LinearPane::List => {
                     if !self.linear_flat_list.is_empty() {
                         self.linear_index = self.linear_flat_list.len() - 1;
-                        while self.linear_index > 0
-                            && matches!(
-                                self.linear_flat_list[self.linear_index],
-                                FlatLinearItem::AssignmentHeader(_)
-                            )
-                        {
-                            self.linear_index -= 1;
+                        while self.linear_index > 0 {
+                            match self.linear_flat_list.get(self.linear_index) {
+                                Some(item)
+                                    if matches!(item, FlatLinearItem::AssignmentHeader(_)) =>
+                                {
+                                    self.linear_index -= 1
+                                }
+                                _ => break,
+                            }
                         }
                     }
                 }
@@ -1692,6 +1771,7 @@ impl App {
                     }
                 }
                 ProcessesPane::Output => {
+                    self.process_follow = true;
                     self.process_output_scroll = usize::MAX;
                 }
             },
@@ -1705,10 +1785,35 @@ impl App {
         }
     }
 
+    /// Toggle follow mode for process output.
+    pub fn toggle_process_follow(&mut self) {
+        self.process_follow = !self.process_follow;
+        if self.process_follow {
+            self.process_output_scroll = usize::MAX;
+        }
+    }
+
+    /// Mark the app as needing a redraw.
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
     // --- Git helpers ---
 
     pub fn load_git_data(&mut self) {
-        match git::load_git_status(&self.project_cwd) {
+        let tx = match self.event_tx.clone() {
+            Some(tx) => tx,
+            None => return,
+        };
+        let cwd = self.project_cwd.clone();
+        std::thread::spawn(move || {
+            let result = git::load_git_status(&cwd).map_err(|e| e.to_string());
+            let _ = tx.send(AppEvent::GitStatusLoaded(result));
+        });
+    }
+
+    pub fn handle_git_status_loaded(&mut self, result: Result<GitStatus, String>) {
+        match result {
             Ok(status) => {
                 self.git_status = status;
                 self.git_flat_list = self.git_status.flat_list();
@@ -1735,12 +1840,25 @@ impl App {
         }
         let idx = self.git_file_index.min(self.git_flat_list.len() - 1);
         if let FlatGitItem::File(ref entry) = self.git_flat_list[idx] {
-            match git::load_diff(&self.project_cwd, entry) {
-                Ok(lines) => self.git_diff_lines = lines,
-                Err(e) => {
-                    self.last_error = Some(format!("Diff: {}", e));
-                    self.git_diff_lines.clear();
-                }
+            let tx = match self.event_tx.clone() {
+                Some(tx) => tx,
+                None => return,
+            };
+            let cwd = self.project_cwd.clone();
+            let entry = entry.clone();
+            std::thread::spawn(move || {
+                let result = git::load_diff(&cwd, &entry).map_err(|e| e.to_string());
+                let _ = tx.send(AppEvent::GitDiffLoaded(result));
+            });
+        }
+    }
+
+    pub fn handle_git_diff_loaded(&mut self, result: Result<Vec<DiffLine>, String>) {
+        match result {
+            Ok(lines) => self.git_diff_lines = lines,
+            Err(e) => {
+                self.last_error = Some(format!("Diff: {}", e));
+                self.git_diff_lines.clear();
             }
         }
     }
@@ -1790,20 +1908,20 @@ impl App {
 
     // --- Data access helpers ---
 
-    pub fn current_team_members(&self) -> Vec<TeamMember> {
+    pub fn current_team_members(&self) -> &[TeamMember] {
         if self.teams.is_empty() {
-            return Vec::new();
+            return &[];
         }
         let idx = self.team_list_index.min(self.teams.len() - 1);
-        self.teams[idx].config.members.clone()
+        &self.teams[idx].config.members
     }
 
-    pub fn current_todo_items(&self) -> Vec<TodoItem> {
+    pub fn current_todo_items(&self) -> &[TodoItem] {
         if self.todo_files.is_empty() {
-            return Vec::new();
+            return &[];
         }
         let idx = self.todo_file_index.min(self.todo_files.len() - 1);
-        self.todo_files[idx].items.clone()
+        &self.todo_files[idx].items
     }
 
     // --- File browser helpers ---
@@ -2119,40 +2237,60 @@ impl App {
     // --- GitHub PR helpers ---
 
     pub fn load_github_prs(&mut self) {
-        if let (Some(ref repo), Some(ref user)) = (&self.gh_repo, &self.gh_user) {
-            match github::list_open_prs(repo) {
-                Ok(prs) => {
-                    // Check for new activity
-                    for pr in &prs {
-                        if let Some(prev) = self.gh_prev_updated.get(&pr.number) {
-                            if *prev != pr.updated_at {
-                                self.gh_new_activity = true;
-                            }
-                        } else {
-                            // New PR appeared
-                            if !self.gh_prev_updated.is_empty() {
-                                self.gh_new_activity = true;
-                            }
+        let (repo, _user) = match (&self.gh_repo, &self.gh_user) {
+            (Some(r), Some(u)) => (r.clone(), u.clone()),
+            (Some(_), None) => {
+                self.last_error = Some(
+                    "GitHub: not authenticated. Run 'gh auth login' to sign in.".to_string(),
+                );
+                return;
+            }
+            _ => return,
+        };
+        self.gh_last_poll = Instant::now();
+        let tx = match self.event_tx.clone() {
+            Some(tx) => tx,
+            None => return,
+        };
+        std::thread::spawn(move || {
+            let result = github::list_open_prs(&repo).map_err(|e| e.to_string());
+            let _ = tx.send(AppEvent::GitHubPrsLoaded(result));
+        });
+    }
+
+    pub fn handle_github_prs_loaded(&mut self, result: Result<Vec<PullRequest>, String>) {
+        match result {
+            Ok(prs) => {
+                // Check for new activity
+                for pr in &prs {
+                    if let Some(prev) = self.gh_prev_updated.get(&pr.number) {
+                        if *prev != pr.updated_at {
+                            self.gh_new_activity = true;
+                        }
+                    } else {
+                        // New PR appeared
+                        if !self.gh_prev_updated.is_empty() {
+                            self.gh_new_activity = true;
                         }
                     }
-                    // Update prev timestamps
-                    self.gh_prev_updated.clear();
-                    for pr in &prs {
-                        self.gh_prev_updated
-                            .insert(pr.number, pr.updated_at.clone());
-                    }
+                }
+                // Update prev timestamps
+                self.gh_prev_updated.clear();
+                for pr in &prs {
+                    self.gh_prev_updated
+                        .insert(pr.number, pr.updated_at.clone());
+                }
 
-                    self.gh_flat_list = github::categorize_prs(&prs, user);
-                    self.gh_prs = prs;
-                    if self.gh_pr_index >= self.gh_flat_list.len() {
-                        self.gh_pr_index = 0;
-                        self.gh_skip_to_pr_entry();
-                    }
-                    self.gh_last_poll = Instant::now();
+                let user = self.gh_user.as_deref().unwrap_or("");
+                self.gh_flat_list = github::categorize_prs(&prs, user);
+                self.gh_prs = prs;
+                if self.gh_pr_index >= self.gh_flat_list.len() {
+                    self.gh_pr_index = 0;
+                    self.gh_skip_to_pr_entry();
                 }
-                Err(e) => {
-                    self.last_error = Some(format!("GitHub: {}", e));
-                }
+            }
+            Err(e) => {
+                self.last_error = Some(format!("GitHub: {}", e));
             }
         }
     }
@@ -2165,6 +2303,7 @@ impl App {
         for i in start..self.gh_flat_list.len() {
             if matches!(self.gh_flat_list[i], FlatPrItem::Pr(_)) {
                 self.gh_pr_index = i;
+                self.gh_detail_scroll = 0;
                 return;
             }
         }
@@ -2177,6 +2316,7 @@ impl App {
         for i in (0..self.gh_pr_index).rev() {
             if matches!(self.gh_flat_list[i], FlatPrItem::Pr(_)) {
                 self.gh_pr_index = i;
+                self.gh_detail_scroll = 0;
                 return;
             }
         }
@@ -2220,23 +2360,43 @@ impl App {
         if !self.gh_issues_enabled {
             return;
         }
-        if let (Some(ref repo), Some(ref user)) = (&self.gh_issues_repo, &self.gh_user) {
-            let state = self.project_config.github_issues_state().to_string();
-            match github::list_issues(repo, &state) {
-                Ok(issues) => {
-                    let mut flat = github::categorize_issues(&issues, user);
-                    self.pin_current_github_issue(&mut flat);
-                    self.gh_issues_flat_list = flat;
-                    self.gh_issues = issues;
-                    if self.gh_issues_index >= self.gh_issues_flat_list.len() {
-                        self.gh_issues_index = 0;
-                        self.issues_skip_to_entry();
-                    }
-                    self.gh_issues_last_poll = Instant::now();
+        let (repo, _user) = match (&self.gh_issues_repo, &self.gh_user) {
+            (Some(r), Some(u)) => (r.clone(), u.clone()),
+            (Some(_), None) => {
+                self.last_error = Some(
+                    "GitHub: not authenticated. Run 'gh auth login' to sign in.".to_string(),
+                );
+                return;
+            }
+            _ => return,
+        };
+        self.gh_issues_last_poll = Instant::now();
+        let tx = match self.event_tx.clone() {
+            Some(tx) => tx,
+            None => return,
+        };
+        let state = self.project_config.github_issues_state().to_string();
+        std::thread::spawn(move || {
+            let result = github::list_issues(&repo, &state).map_err(|e| e.to_string());
+            let _ = tx.send(AppEvent::GitHubIssuesLoaded(result));
+        });
+    }
+
+    pub fn handle_github_issues_loaded(&mut self, result: Result<Vec<GitHubIssue>, String>) {
+        match result {
+            Ok(issues) => {
+                let user = self.gh_user.as_deref().unwrap_or("");
+                let mut flat = github::categorize_issues(&issues, user);
+                self.pin_current_github_issue(&mut flat);
+                self.gh_issues_flat_list = flat;
+                self.gh_issues = issues;
+                if self.gh_issues_index >= self.gh_issues_flat_list.len() {
+                    self.gh_issues_index = 0;
+                    self.issues_skip_to_entry();
                 }
-                Err(e) => {
-                    self.last_error = Some(format!("Issues: {}", e));
-                }
+            }
+            Err(e) => {
+                self.last_error = Some(format!("Issues: {}", e));
             }
         }
     }
@@ -2396,7 +2556,13 @@ impl App {
                 }
                 github::create_issue(&repo, &title, &body)
             }
-            IssueEditMode::Edit(number) => github::edit_issue(&repo, *number, &title, &body),
+            IssueEditMode::Edit(number) => {
+                if title.trim().is_empty() {
+                    self.last_error = Some("Title cannot be empty".to_string());
+                    return;
+                }
+                github::edit_issue(&repo, *number, &title, &body)
+            }
             IssueEditMode::Comment(number) => {
                 if body.trim().is_empty() {
                     self.last_error = Some("Comment cannot be empty".to_string());
@@ -2448,10 +2614,25 @@ impl App {
         if !self.has_jira {
             return;
         }
-        match jira::search_my_issues(
-            self.project_config.jira_project(),
-            self.project_config.jira_jql(),
-        ) {
+        self.jira_last_poll = Instant::now();
+        let tx = match self.event_tx.clone() {
+            Some(tx) => tx,
+            None => return,
+        };
+        let project_key = self.project_config.jira_project().map(|s| s.to_string());
+        let custom_jql = self.project_config.jira_jql().map(|s| s.to_string());
+        std::thread::spawn(move || {
+            let result = jira::search_my_issues(
+                project_key.as_deref(),
+                custom_jql.as_deref(),
+            )
+            .map_err(|e| e.to_string());
+            let _ = tx.send(AppEvent::JiraIssuesLoaded(result));
+        });
+    }
+
+    pub fn handle_jira_issues_loaded(&mut self, result: Result<Vec<JiraIssue>, String>) {
+        match result {
             Ok(issues) => {
                 let mut flat = jira::categorize_issues(&issues);
                 self.pin_current_jira_issue(&mut flat);
@@ -2461,7 +2642,6 @@ impl App {
                     self.jira_index = 0;
                     self.jira_skip_to_issue_entry();
                 }
-                self.jira_last_poll = Instant::now();
             }
             Err(e) => {
                 self.last_error = Some(format!("Jira: {}", e));
@@ -2529,6 +2709,7 @@ impl App {
                     self.load_jira_issues();
                 }
                 Err(e) => {
+                    self.jira_show_transitions = false;
                     self.last_error = Some(format!("Transition: {}", e));
                 }
             }
@@ -2626,11 +2807,24 @@ impl App {
             Some(k) => k.to_string(),
             None => return,
         };
+        self.linear_last_poll = Instant::now();
+        let tx = match self.event_tx.clone() {
+            Some(tx) => tx,
+            None => return,
+        };
         let username = self.project_config.linear_username().map(|s| s.to_string());
         let team = self.project_config.linear_team().map(|s| s.to_string());
+        std::thread::spawn(move || {
+            let result =
+                linear::fetch_my_issues(&api_key, username.as_deref(), team.as_deref())
+                    .map_err(|e| e.to_string());
+            let _ = tx.send(AppEvent::LinearIssuesLoaded(result));
+        });
+    }
 
-        self.linear_last_poll = Instant::now();
-        match linear::fetch_my_issues(&api_key, username.as_deref(), team.as_deref()) {
+    pub fn handle_linear_issues_loaded(&mut self, result: Result<Vec<LinearIssue>, String>) {
+        let username = self.project_config.linear_username().map(|s| s.to_string());
+        match result {
             Ok(issues) => {
                 let mut flat = linear::categorize_issues(&issues, username.as_deref());
                 self.pin_current_linear_issue(&mut flat);
@@ -2782,7 +2976,14 @@ impl App {
         let id = self.next_process_id;
         self.next_process_id += 1;
 
-        let tx = self.process_tx.as_ref().unwrap().clone();
+        let tx = match self.process_tx.as_ref() {
+            Some(tx) => tx.clone(),
+            None => {
+                self.last_error =
+                    Some("Internal error: process channel not initialized".to_string());
+                return;
+            }
+        };
         match process_runner::spawn_claude_headless(id, prompt, &self.project_cwd, tx) {
             Ok(child) => {
                 let process = SpawnedProcess {
@@ -2793,8 +2994,8 @@ impl App {
                     status: ProcessStatus::Running,
                     prompt: prompt.to_string(),
                     cwd: self.project_cwd.clone(),
-                    output_lines: Vec::new(),
-                    error_lines: Vec::new(),
+                    output_lines: std::collections::VecDeque::new(),
+                    error_lines: std::collections::VecDeque::new(),
                     session_id: None,
                     progress_lines: Vec::new(),
                 };
@@ -2820,6 +3021,7 @@ impl App {
         for i in start..self.linear_flat_list.len() {
             if matches!(self.linear_flat_list[i], FlatLinearItem::Issue(_)) {
                 self.linear_index = i;
+                self.linear_detail_scroll = 0;
                 return;
             }
         }
@@ -2832,6 +3034,7 @@ impl App {
         for i in (0..self.linear_index).rev() {
             if matches!(self.linear_flat_list[i], FlatLinearItem::Issue(_)) {
                 self.linear_index = i;
+                self.linear_detail_scroll = 0;
                 return;
             }
         }
@@ -2895,16 +3098,24 @@ impl App {
 
     /// Poll for process output messages (called from the event loop).
     pub fn poll_process_output(&mut self) {
+        use crate::model::process::MAX_PROCESS_OUTPUT_LINES;
+
         let rx = match self.process_rx {
             Some(ref rx) => rx,
             None => return,
         };
 
+        let selected_id = self.selected_process().map(|p| p.id);
+        let mut got_output_for_selected = false;
+
         while let Ok(msg) = rx.try_recv() {
             match msg {
                 ProcessOutput::Stdout(id, line) => {
                     if let Some(proc) = self.processes.iter_mut().find(|p| p.id == id) {
-                        proc.output_lines.push(line.clone());
+                        proc.output_lines.push_back(line.clone());
+                        if proc.output_lines.len() > MAX_PROCESS_OUTPUT_LINES {
+                            proc.output_lines.pop_front();
+                        }
                         if let Some((new_lines, sid)) = parse_stream_json_event(&line) {
                             proc.progress_lines.extend(new_lines);
                             if proc.session_id.is_none() {
@@ -2913,24 +3124,28 @@ impl App {
                                 }
                             }
                         }
+                        if Some(id) == selected_id {
+                            got_output_for_selected = true;
+                        }
                     }
                 }
                 ProcessOutput::Stderr(id, line) => {
                     if let Some(proc) = self.processes.iter_mut().find(|p| p.id == id) {
-                        proc.error_lines.push(line);
+                        proc.error_lines.push_back(line);
+                        if proc.error_lines.len() > MAX_PROCESS_OUTPUT_LINES {
+                            proc.error_lines.pop_front();
+                        }
+                        if Some(id) == selected_id {
+                            got_output_for_selected = true;
+                        }
                     }
-                }
-                ProcessOutput::Exited(id, success) => {
-                    if let Some(proc) = self.processes.iter_mut().find(|p| p.id == id) {
-                        proc.status = if success {
-                            ProcessStatus::Completed
-                        } else {
-                            ProcessStatus::Failed
-                        };
-                    }
-                    self.process_children.retain(|(pid, _)| *pid != id);
                 }
             }
+        }
+
+        // Auto-scroll to bottom if follow mode is on and new output arrived
+        if self.process_follow && got_output_for_selected {
+            self.process_output_scroll = usize::MAX;
         }
 
         // Check for exited children
@@ -2986,7 +3201,7 @@ impl App {
             .iter_mut()
             .position(|(pid, _)| *pid == id)
         {
-            let _ = self.process_children[pos].1.kill();
+            kill_process_tree(self.process_children[pos].1.id());
             self.process_children.remove(pos);
         }
         self.processes[idx].status = ProcessStatus::Failed;
@@ -3321,4 +3536,23 @@ impl App {
             }
         }
     }
+}
+
+impl Drop for App {
+    fn drop(&mut self) {
+        for (_, child) in &mut self.process_children {
+            kill_process_tree(child.id());
+            let _ = child.wait();
+        }
+    }
+}
+
+/// Kill a process and its entire process tree on Windows using `taskkill /F /T`.
+/// Falls back silently if taskkill is not available.
+fn kill_process_tree(pid: u32) {
+    let _ = Command::new("taskkill")
+        .args(["/F", "/T", "/PID", &pid.to_string()])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output();
 }

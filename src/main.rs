@@ -53,8 +53,8 @@ enum Command {
         #[arg(long)]
         resume: Option<String>,
 
-        /// Claude pane width ratio (0.0-1.0)
-        #[arg(long, default_value_t = 0.5)]
+        /// Claude pane width ratio (0.01-0.99)
+        #[arg(long, default_value_t = 0.5, value_parser = parse_claude_ratio)]
         claude_ratio: f64,
 
         /// Terminal columns
@@ -88,12 +88,13 @@ MODES:
 
 GLOBAL OPTIONS:
   --cwd <DIR>       Project directory to monitor [default: current dir]
+  --two-pane        Enable two-pane mode (pane send with 'i')
   -h, --help        Print this help
   -V, --version     Print version
 
 LAUNCH OPTIONS:
   --resume <ID>             Resume a Claude Code session by ID
-  --claude-ratio <FLOAT>    Claude pane width ratio, 0.0-1.0 [default: 0.5]
+  --claude-ratio <FLOAT>    Claude pane width ratio, 0.01-0.99 [default: 0.5]
   --cols <N>                Terminal columns [default: 200]
   --rows <N>                Terminal rows [default: 50]
   -- <ARGS>...              Extra arguments passed to claude
@@ -130,6 +131,19 @@ EXAMPLES:
   assoc --cwd C:\\dev\\myproject
   assoc launch --cwd C:\\dev\\myproject -- --dangerously-skip-permissions
   assoc launch --resume abc123 --claude-ratio 0.6";
+
+fn parse_claude_ratio(s: &str) -> Result<f64, String> {
+    let v: f64 = s
+        .parse()
+        .map_err(|_| format!("'{}' is not a valid float", s))?;
+    if v < 0.01 || v > 0.99 {
+        return Err(format!(
+            "claude-ratio must be between 0.01 and 0.99, got {}",
+            v
+        ));
+    }
+    Ok(v)
+}
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -265,12 +279,14 @@ fn run_app(
     let mut app = App::new(project_cwd);
     app.two_pane = two_pane;
 
-    // Initial data load
+    // Create event channel before initial load so async spawners can send results
+    let (tx, rx) = mpsc::channel::<AppEvent>();
+    app.event_tx = Some(tx.clone());
+
+    // Initial data load (async loaders will send results through the channel)
     app.load_all();
 
     // Setup file watcher (skips directories for disabled tabs)
-    let (tx, rx) = mpsc::channel::<AppEvent>();
-    app.event_tx = Some(tx.clone());
     let _debouncer = watcher::start_watcher(
         app.claude_home.clone(),
         app.encoded_project.clone(),
@@ -284,8 +300,11 @@ fn run_app(
     let mut last_tick = Instant::now();
 
     loop {
-        // Draw
-        terminal.draw(|f| ui::draw(f, &app))?;
+        // Draw only when dirty
+        if app.dirty {
+            terminal.draw(|f| ui::draw(f, &app))?;
+            app.dirty = false;
+        }
 
         // Handle events
         let timeout = tick_rate.saturating_sub(last_tick.elapsed());
@@ -295,6 +314,7 @@ fn run_app(
             if let Event::Key(key) = ct_event::read()? {
                 if key.kind == KeyEventKind::Press {
                     handle_key(&mut app, key);
+                    app.mark_dirty();
                 }
             }
         }
@@ -304,7 +324,20 @@ fn run_app(
             match evt {
                 AppEvent::FileChanged(change) => app.handle_file_change(change),
                 AppEvent::PaneSendComplete(err) => app.handle_send_complete(err),
+                AppEvent::GitHubPrsLoaded(result) => app.handle_github_prs_loaded(result),
+                AppEvent::GitHubIssuesLoaded(result) => {
+                    app.handle_github_issues_loaded(result)
+                }
+                AppEvent::JiraIssuesLoaded(result) => {
+                    app.handle_jira_issues_loaded(result)
+                }
+                AppEvent::LinearIssuesLoaded(result) => {
+                    app.handle_linear_issues_loaded(result)
+                }
+                AppEvent::GitStatusLoaded(result) => app.handle_git_status_loaded(result),
+                AppEvent::GitDiffLoaded(result) => app.handle_git_diff_loaded(result),
             }
+            app.mark_dirty();
         }
 
         // Tick
@@ -350,6 +383,8 @@ fn run_app(
 
             // Clear stale send status
             app.clear_stale_send_status();
+
+            app.mark_dirty();
         }
 
         if app.should_quit {
@@ -498,12 +533,12 @@ fn handle_key(app: &mut App, key: KeyEvent) {
         KeyCode::Char('g') => app.jump_top(),
         KeyCode::Char('G') => app.jump_bottom(),
 
-        // Follow mode (Sessions tab)
-        KeyCode::Char('f') => {
-            if app.active_tab == app::ActiveTab::Sessions {
-                app.toggle_follow();
-            }
-        }
+        // Follow mode (Sessions tab / Processes tab)
+        KeyCode::Char('f') => match app.active_tab {
+            app::ActiveTab::Sessions => app.toggle_follow(),
+            app::ActiveTab::Processes => app.toggle_process_follow(),
+            _ => {}
+        },
 
         // Subagent transcript cycling (Sessions tab) / Jump to session (Processes tab)
         KeyCode::Char('s') => {
@@ -654,11 +689,13 @@ fn handle_issues_edit_key(app: &mut App, key: KeyEvent) {
             app.issues_cancel_edit();
         }
         KeyCode::Tab => {
-            // Toggle between title and body fields
-            app.gh_issues_edit_field = match app.gh_issues_edit_field {
-                app::IssueEditField::Title => app::IssueEditField::Body,
-                app::IssueEditField::Body => app::IssueEditField::Title,
-            };
+            // Toggle between title and body fields (only in Create/Edit mode, not Comment)
+            if !matches!(app.gh_issues_edit_mode, Some(app::IssueEditMode::Comment(_))) {
+                app.gh_issues_edit_field = match app.gh_issues_edit_field {
+                    app::IssueEditField::Title => app::IssueEditField::Body,
+                    app::IssueEditField::Body => app::IssueEditField::Title,
+                };
+            }
         }
         _ => {
             // Pass key to active TextArea

@@ -21,7 +21,11 @@ pub fn load_inbox(
     }
 
     let data = std::fs::read_to_string(&inbox_path)?;
-    let mut messages: Vec<InboxMessage> = serde_json::from_str(&data)?;
+    let raw_values: Vec<serde_json::Value> = serde_json::from_str(&data)?;
+    let mut messages: Vec<InboxMessage> = raw_values
+        .into_iter()
+        .filter_map(|v| serde_json::from_value(v).ok())
+        .collect();
 
     // Sort by timestamp descending (most recent first)
     messages.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));

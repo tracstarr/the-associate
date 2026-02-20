@@ -73,9 +73,14 @@ assoc
 
 # Monitor a specific project
 assoc --cwd C:\dev\myproject
+
+# Enable two-pane mode manually (for pane send with 'i')
+assoc --two-pane
 ```
 
 The dashboard opens in your terminal, showing real-time data from Claude Code's `~/.claude/` directory for the given project. All data updates automatically via a file watcher — no manual refresh needed.
+
+> **Note:** The `--two-pane` flag enables pane send mode, which lets you send text to a Claude Code pane using the `i` key. This flag is set automatically when using `assoc launch`. You only need to pass it manually if you set up the two-pane layout yourself.
 
 ### Side-by-Side Launch
 
@@ -91,7 +96,7 @@ assoc launch --cwd C:\dev\myproject
 # Resume a previous Claude Code session
 assoc launch --resume abc123
 
-# Adjust pane width ratio (0.0-1.0, default 0.5)
+# Adjust pane width ratio (0.01-0.99, default 0.5)
 assoc launch --claude-ratio 0.6
 
 # Set terminal dimensions
@@ -107,7 +112,7 @@ assoc launch -- --dangerously-skip-permissions
 |--------|---------|-------------|
 | `--cwd <DIR>` | Current directory | Project directory to monitor |
 | `--resume <ID>` | — | Resume a Claude Code session by ID |
-| `--claude-ratio <FLOAT>` | `0.5` | Claude pane width as a fraction of the terminal |
+| `--claude-ratio <FLOAT>` | `0.5` | Claude pane width as a fraction of the terminal (0.01-0.99) |
 | `--cols <N>` | `200` | Terminal width in columns |
 | `--rows <N>` | `50` | Terminal height in rows |
 | `-- <ARGS>` | — | Extra arguments passed through to Claude Code |
@@ -115,6 +120,10 @@ assoc launch -- --dangerously-skip-permissions
 ## Configuration
 
 The Associate reads an optional `.assoc.toml` file from your project directory. This file lets you configure integrations and display settings without passing command-line flags.
+
+> **Security:** The `.assoc.toml` file may contain sensitive API keys (Linear API key, Jira credentials via `acli`). Add `.assoc.toml` to your `.gitignore` to avoid accidentally committing secrets to version control.
+
+> **Note:** The config file must be placed in the project root directory (the directory passed to `--cwd`, or the current working directory). The Associate does not search parent directories for configuration files.
 
 ```toml
 # .assoc.toml - place in your project root
@@ -135,6 +144,9 @@ jql = "assignee = currentUser() AND resolution = Unresolved"
 api_key = "lin_api_..."      # Linear personal API key (required)
 username = "you@example.com" # Your Linear email for My Tasks grouping
 team = "BIT"                 # Optional: filter to a specific team key
+
+[pane]
+direction = "right"          # Focus direction for pane send: right, left, up, down
 
 [display]
 tick_rate = 250              # UI refresh interval in ms (default: 250)
@@ -184,6 +196,17 @@ prompt = "Review the code changes related to this ticket and provide feedback."
 | `linear.api_key` | String | Your Linear API key. Required to enable the Linear tab. Generate one at **Linear > Settings > API**. |
 | `linear.username` | String | Your Linear account email address. Used to separate issues into **My Tasks** (assigned to you) and **Unassigned** sections. |
 | `linear.team` | String | Linear team key (e.g. `BIT`) to filter issues to a specific team. Optional — omit to show issues across all teams. |
+
+### Pane settings
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `pane.direction` | String | `"right"` | Direction to move focus to reach the Claude Code pane when using pane send (`i`). Valid values: `"right"`, `"left"`, `"up"`, `"down"`. |
+
+```toml
+[pane]
+direction = "left"   # right (default), left, up, down
+```
 
 ### Display settings
 

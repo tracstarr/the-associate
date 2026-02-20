@@ -19,6 +19,15 @@ pub fn search_my_issues(
     } else {
         let mut q = "assignee = currentUser() AND statusCategory not in (Done)".to_string();
         if let Some(key) = project_key {
+            if !key.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+                || key.is_empty()
+                || !key.starts_with(|c: char| c.is_ascii_uppercase())
+            {
+                anyhow::bail!(
+                    "invalid Jira project key {:?}: must match [A-Z][A-Z0-9_]+",
+                    key
+                );
+            }
             q.push_str(&format!(" AND project = \"{}\"", key));
         }
         q.push_str(" ORDER BY status ASC, updated DESC");
@@ -73,7 +82,7 @@ pub fn search_my_issues(
 /// If `query` looks like a Jira key (starts with uppercase letters followed by '-'),
 /// search by key. Otherwise search by label.
 pub fn search_issues(query: &str) -> Result<Vec<JiraIssue>> {
-    let safe_query = query.replace('"', "\\\"");
+    let safe_query = query.replace('\\', "\\\\").replace('"', "\\\"");
     let jql = if looks_like_jira_key(query) {
         format!("key = \"{}\"", safe_query)
     } else {

@@ -52,16 +52,24 @@ impl TranscriptReader {
     }
 
     /// Incremental read: only parse new lines since last_offset.
-    pub fn read_new(&mut self, path: &Path) -> Result<bool> {
+    /// Returns `Ok((had_new, drained_count))` where `drained_count` is the
+    /// number of items removed from the front when the cap is exceeded.
+    pub fn read_new(&mut self, path: &Path) -> Result<(bool, usize)> {
         if !path.exists() {
-            return Ok(false);
+            return Ok((false, 0));
         }
 
         let file = std::fs::File::open(path)?;
         let file_len = file.metadata()?.len();
 
+        if file_len < self.last_offset {
+            // File was truncated (e.g., session rotated) — reset and do full reload
+            self.items.clear();
+            self.last_offset = 0;
+        }
+
         if file_len <= self.last_offset {
-            return Ok(false);
+            return Ok((false, 0));
         }
 
         let mut reader = BufReader::new(file);
@@ -90,11 +98,15 @@ impl TranscriptReader {
 
         // Cap transcript items to prevent unbounded memory growth
         const MAX_TRANSCRIPT_ITEMS: usize = 5000;
-        if self.items.len() > MAX_TRANSCRIPT_ITEMS {
-            self.items.drain(0..self.items.len() - MAX_TRANSCRIPT_ITEMS);
-        }
+        let drained = if self.items.len() > MAX_TRANSCRIPT_ITEMS {
+            let drain_count = self.items.len() - MAX_TRANSCRIPT_ITEMS;
+            self.items.drain(0..drain_count);
+            drain_count
+        } else {
+            0
+        };
 
         self.last_offset = file_len;
-        Ok(had_new)
+        Ok((had_new, drained))
     }
 }

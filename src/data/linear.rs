@@ -81,7 +81,8 @@ fn build_query(username: Option<&str>, team_key: Option<&str>) -> String {
     filters.push("state: { type: { nin: [\"completed\", \"cancelled\"] } }".to_string());
 
     if let Some(team) = team_key {
-        filters.push(format!("team: {{ key: {{ eq: \"{}\" }} }}", team));
+        let safe_key = team.replace('\\', "\\\\").replace('"', "\\\"");
+        filters.push(format!("team: {{ key: {{ eq: \"{}\" }} }}", safe_key));
     }
 
     let filter_str = filters.join(", ");
@@ -89,9 +90,10 @@ fn build_query(username: Option<&str>, team_key: Option<&str>) -> String {
     // When username is set, include issues assigned to that user OR unassigned.
     // Without username, return all non-completed workspace issues.
     let assignee_filter = if let Some(email) = username {
+        let safe_user = email.replace('\\', "\\\\").replace('"', "\\\"");
         format!(
             r#", or: [{{ assignee: {{ email: {{ eq: "{}" }} }} }}, {{ assignee: {{ null: true }} }}]"#,
-            email
+            safe_user
         )
     } else {
         String::new()
@@ -149,6 +151,7 @@ pub fn categorize_issues(issues: &[LinearIssue], username: Option<&str>) -> Vec<
     };
 
     let mut my_tasks: Vec<&LinearIssue> = Vec::new();
+    let mut assigned: Vec<&LinearIssue> = Vec::new();
     let mut unassigned: Vec<&LinearIssue> = Vec::new();
 
     for issue in issues {
@@ -163,12 +166,16 @@ pub fn categorize_issues(issues: &[LinearIssue], username: Option<&str>) -> Vec<
                 });
                 if is_mine {
                     my_tasks.push(issue);
+                } else if username.is_none() {
+                    // When no username is configured, show all assigned issues
+                    assigned.push(issue);
                 }
             }
         }
     }
 
     my_tasks.sort_by_key(|i| state_priority(&i.state.state_type));
+    assigned.sort_by_key(|i| state_priority(&i.state.state_type));
     unassigned.sort_by_key(|i| state_priority(&i.state.state_type));
 
     let mut result = Vec::new();
@@ -176,6 +183,13 @@ pub fn categorize_issues(issues: &[LinearIssue], username: Option<&str>) -> Vec<
     if !my_tasks.is_empty() {
         result.push(FlatLinearItem::AssignmentHeader("My Tasks".to_string()));
         for issue in my_tasks {
+            result.push(FlatLinearItem::Issue(Box::new(issue.clone())));
+        }
+    }
+
+    if !assigned.is_empty() {
+        result.push(FlatLinearItem::AssignmentHeader("Assigned".to_string()));
+        for issue in assigned {
             result.push(FlatLinearItem::Issue(Box::new(issue.clone())));
         }
     }

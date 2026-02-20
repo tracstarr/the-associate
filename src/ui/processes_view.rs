@@ -112,7 +112,11 @@ fn draw_process_output(f: &mut Frame, area: Rect, app: &App) {
             .as_deref()
             .map(|s| format!(" [sid:{}]", &s[..8.min(s.len())]))
             .unwrap_or_default();
-        format!(" {} {} [{}]{} ", p.label, p.title, status_str, sid_suffix)
+        let follow_indicator = if app.process_follow { " [FOLLOW]" } else { "" };
+        format!(
+            " {} {} [{}]{}{} ",
+            p.label, p.title, status_str, sid_suffix, follow_indicator
+        )
     } else {
         " Output ".to_string()
     };

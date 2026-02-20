@@ -581,6 +581,7 @@
         <a href="#config-github" class="sidebar-link sub">GitHub</a>
         <a href="#config-jira" class="sidebar-link sub">Jira</a>
         <a href="#config-linear" class="sidebar-link sub">Linear</a>
+        <a href="#config-pane" class="sidebar-link sub">Pane</a>
         <a href="#config-display" class="sidebar-link sub">Display</a>
         <a href="#config-tabs" class="sidebar-link sub">Tabs</a>
         <a href="#config-prompts" class="sidebar-link sub">Custom Prompts</a>
@@ -699,9 +700,16 @@ cargo build --release</div>
 assoc
 
 <span class="comment"># Monitor a specific project</span>
-assoc --cwd C:\dev\myproject</div>
+assoc --cwd C:\dev\myproject
+
+<span class="comment"># Enable two-pane mode manually (for pane send with 'i')</span>
+assoc --two-pane</div>
 
       <p>The dashboard opens in your terminal, showing real-time data from Claude Code's <code>~/.claude/</code> directory for the given project. All data updates automatically via a file watcher &mdash; no manual refresh needed.</p>
+
+      <div class="callout callout-info">
+        <p><strong>Note:</strong> The <code>--two-pane</code> flag enables pane send mode, which lets you send text to a Claude Code pane using the <kbd>i</kbd> key. This flag is set automatically when using <code>assoc launch</code>. You only need to pass it manually if you set up the two-pane layout yourself.</p>
+      </div>
 
       <h3 id="usage-launch">Side-by-Side Launch</h3>
 
@@ -716,7 +724,7 @@ assoc launch --cwd C:\dev\myproject
 <span class="comment"># Resume a previous Claude Code session</span>
 assoc launch --resume abc123
 
-<span class="comment"># Adjust pane width ratio (0.0-1.0, default 0.5)</span>
+<span class="comment"># Adjust pane width ratio (0.01-0.99, default 0.5)</span>
 assoc launch --claude-ratio 0.6
 
 <span class="comment"># Set terminal dimensions</span>
@@ -748,7 +756,7 @@ assoc launch -- --dangerously-skip-permissions</div>
           <tr>
             <td><code>--claude-ratio &lt;FLOAT&gt;</code></td>
             <td><code>0.5</code></td>
-            <td>Claude pane width as a fraction of the terminal</td>
+            <td>Claude pane width as a fraction of the terminal (0.01&ndash;0.99)</td>
           </tr>
           <tr>
             <td><code>--cols &lt;N&gt;</code></td>
@@ -815,6 +823,14 @@ direction = "left"   <span class="comment"># right (default), left, up, down</sp
 
       <p>The Associate reads an optional <code>.assoc.toml</code> file from your project directory. This file lets you configure integrations and display settings without passing command-line flags.</p>
 
+      <div class="callout">
+        <p><strong>Security:</strong> The <code>.assoc.toml</code> file may contain sensitive API keys (Linear API key, Jira credentials via <code>acli</code>). Add <code>.assoc.toml</code> to your <code>.gitignore</code> to avoid accidentally committing secrets to version control.</p>
+      </div>
+
+      <div class="callout callout-info">
+        <p><strong>Note:</strong> The config file must be placed in the project root directory (the directory passed to <code>--cwd</code>, or the current working directory). The Associate does not search parent directories for configuration files.</p>
+      </div>
+
       <div class="code-block"><span class="comment"># .assoc.toml - place in your project root</span>
 
 [github]
@@ -833,6 +849,9 @@ jql = "assignee = currentUser() AND resolution = Unresolved"
 api_key = "lin_api_..."      <span class="comment"># Linear personal API key (required)</span>
 username = "you@example.com" <span class="comment"># Your Linear email for My Tasks grouping</span>
 team = "BIT"                 <span class="comment"># Optional: filter to a specific team key</span>
+
+[pane]
+direction = "right"          <span class="comment"># Focus direction for pane send: right, left, up, down</span>
 
 [display]
 tick_rate = 250              <span class="comment"># UI refresh interval in ms (default: 250)</span>
@@ -926,6 +945,21 @@ prompt = "Review the code changes related to this ticket and provide feedback."<
             <td><code>linear.team</code></td>
             <td>String</td>
             <td>Linear team key (e.g. <code>BIT</code>) to filter issues to a specific team. Optional — omit to show issues across all teams.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 id="config-pane">Pane settings</h3>
+      <table class="config-table">
+        <thead>
+          <tr><th>Key</th><th>Type</th><th>Default</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>pane.direction</code></td>
+            <td>String</td>
+            <td><code>"right"</code></td>
+            <td>Direction to move focus to reach the Claude Code pane when using pane send (<kbd>i</kbd>). Valid values: <code>"right"</code>, <code>"left"</code>, <code>"up"</code>, <code>"down"</code>.</td>
           </tr>
         </tbody>
       </table>

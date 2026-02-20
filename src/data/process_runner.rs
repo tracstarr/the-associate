@@ -13,8 +13,6 @@ pub enum ProcessOutput {
     Stdout(usize, String),
     /// A line of stderr from the process.
     Stderr(usize, String),
-    /// The process has exited with the given success status.
-    Exited(usize, bool),
 }
 
 /// Spawn `claude -p "<prompt>"` in headless mode.
@@ -83,17 +81,6 @@ pub fn spawn_claude_headless(
                 Err(_) => break,
             }
         }
-    });
-
-    // Spawn thread to wait for process exit
-    let child_id = child.id();
-    thread::spawn(move || {
-        // We need to wait for the child to exit.
-        // Since we took stdout/stderr, the child handle is still valid for wait.
-        // However, we don't have the child handle here. We'll handle exit detection
-        // by detecting EOF on stdout/stderr readers above, then checking via try_wait
-        // in the main loop.
-        let _ = child_id; // just to prevent unused warning
     });
 
     Ok(child)

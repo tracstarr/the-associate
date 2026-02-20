@@ -22,6 +22,7 @@ pub struct PullRequest {
     pub assignees: Vec<PrAssignee>,
     #[serde(default)]
     pub labels: Vec<PrLabel>,
+    pub body: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -4,16 +4,10 @@ use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
 use ratatui::Frame;
 
 use super::theme;
+use super::util::truncate_chars;
 use crate::app::{App, FileBrowserPane};
 use crate::model::filebrowser::{EntryKind, FileContent};
 use crate::model::plan::MarkdownLineKind;
-
-fn truncate_chars(s: &str, max_chars: usize) -> &str {
-    match s.char_indices().nth(max_chars) {
-        Some((idx, _)) => &s[..idx],
-        None => s,
-    }
-}
 
 pub fn draw_filebrowser(f: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()

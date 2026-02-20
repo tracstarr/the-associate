@@ -22,10 +22,10 @@ pub fn load_plans(claude_home: &Path) -> Result<Vec<PlanFile>> {
             Some(n) => n.to_string_lossy().to_string(),
             None => continue,
         };
-        let modified = entry
-            .metadata()?
-            .modified()
-            .unwrap_or(std::time::UNIX_EPOCH);
+        let modified = match entry.metadata() {
+            Ok(m) => m.modified().unwrap_or(std::time::UNIX_EPOCH),
+            Err(_) => continue,
+        };
         let content = std::fs::read_to_string(&path).unwrap_or_default();
         let title = extract_title(&content);
         let lines = parse_markdown_lines(&content);
@@ -74,7 +74,13 @@ pub fn parse_markdown_lines(content: &str) -> Vec<MarkdownLine> {
                 kind: MarkdownLineKind::CodeBlock,
                 text: line.to_string(),
             });
-        } else if trimmed.starts_with('#') {
+        } else if trimmed.starts_with("# ")
+            || trimmed.starts_with("## ")
+            || trimmed.starts_with("### ")
+            || trimmed.starts_with("#### ")
+            || trimmed.starts_with("##### ")
+            || trimmed.starts_with("###### ")
+        {
             result.push(MarkdownLine {
                 kind: MarkdownLineKind::Heading,
                 text: line.to_string(),

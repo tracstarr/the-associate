@@ -224,6 +224,18 @@ fn draw_pr_detail(f: &mut Frame, area: Rect, app: &App) {
         theme::LIST_NORMAL,
     )));
 
+    // Description (body)
+    if let Some(body) = &pr.body {
+        if !body.trim().is_empty() {
+            lines.push(Line::from(""));
+            let label_style = theme::LIST_NORMAL.add_modifier(Modifier::BOLD);
+            lines.push(Line::from(Span::styled("Description:", label_style)));
+            for line in body.lines() {
+                lines.push(Line::from(format!("  {}", line)));
+            }
+        }
+    }
+
     // Apply scroll offset
     let inner = block.inner(area);
     f.render_widget(block, area);
