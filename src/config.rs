@@ -33,6 +33,39 @@ pub struct ProjectConfig {
     pub jira: Option<JiraConfig>,
     pub linear: Option<LinearConfig>,
     pub display: Option<DisplayConfig>,
+    pub tabs: Option<TabsConfig>,
+}
+
+/// Per-tab enable/disable configuration.
+/// All tabs default to enabled (`true`). Set a tab to `false` to disable it
+/// entirely — its data won't be loaded, watched, or polled.
+#[derive(Debug, Clone, Deserialize)]
+pub struct TabsConfig {
+    pub sessions: Option<bool>,
+    pub teams: Option<bool>,
+    pub todos: Option<bool>,
+    pub git: Option<bool>,
+    pub plans: Option<bool>,
+    pub github_prs: Option<bool>,
+    pub github_issues: Option<bool>,
+    pub jira: Option<bool>,
+    pub linear: Option<bool>,
+}
+
+impl Default for TabsConfig {
+    fn default() -> Self {
+        Self {
+            sessions: None,
+            teams: None,
+            todos: None,
+            git: None,
+            plans: None,
+            github_prs: None,
+            github_issues: None,
+            jira: None,
+            linear: None,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -71,6 +104,10 @@ pub struct DisplayConfig {
 }
 
 impl ProjectConfig {
+    pub fn tabs_config(&self) -> TabsConfig {
+        self.tabs.clone().unwrap_or_default()
+    }
+
     pub fn tick_rate(&self) -> u64 {
         self.display
             .as_ref()
