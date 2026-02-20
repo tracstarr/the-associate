@@ -11,7 +11,7 @@ use crate::event::FileChange;
 use crate::model::agent_status::{self, AgentStatus};
 use crate::model::filebrowser::{FileBrowserEntry, FileContent};
 use crate::model::git::{DiffLine, FlatGitItem, GitStatus};
-use crate::model::github::{FlatPrItem, PullRequest};
+use crate::model::github::{FlatIssueItem, FlatPrItem, GitHubIssue, PullRequest};
 use crate::model::inbox::InboxMessage;
 use crate::model::jira::{FlatJiraItem, JiraIssue, JiraTransition};
 use crate::model::plan::{MarkdownLine, PlanFile as PlanFileModel};
@@ -29,6 +29,7 @@ pub enum ActiveTab {
     Git,
     Plans,
     GitHubPRs,
+    GitHubIssues,
     Jira,
 }
 
@@ -74,6 +75,27 @@ pub enum TeamsPane {
 pub enum GitHubPane {
     List,
     Detail,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum IssuesPane {
+    List,
+    Detail,
+}
+
+/// Mode for the issues editor overlay (create or edit).
+#[derive(Debug, Clone, PartialEq)]
+pub enum IssueEditMode {
+    Create,
+    Edit(u64), // issue number
+    Comment(u64),
+}
+
+/// Which field is focused in the issue editor.
+#[derive(Debug, Clone, PartialEq)]
+pub enum IssueEditField {
+    Title,
+    Body,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -168,6 +190,21 @@ pub struct App {
     pub gh_prev_updated: HashMap<u64, String>,
     pub gh_new_activity: bool,
 
+    // GitHub Issues tab
+    pub gh_issues_enabled: bool,
+    pub gh_issues_repo: Option<String>,
+    pub gh_issues: Vec<GitHubIssue>,
+    pub gh_issues_flat_list: Vec<FlatIssueItem>,
+    pub gh_issues_index: usize,
+    pub gh_issues_pane: IssuesPane,
+    pub gh_issues_detail_scroll: usize,
+    pub gh_issues_last_poll: Instant,
+    pub gh_issues_editing: bool,
+    pub gh_issues_edit_mode: Option<IssueEditMode>,
+    pub gh_issues_edit_field: IssueEditField,
+    pub gh_issues_title_editor: Option<tui_textarea::TextArea<'static>>,
+    pub gh_issues_body_editor: Option<tui_textarea::TextArea<'static>>,
+
     // Jira tab
     pub has_jira: bool,
     pub jira_issues: Vec<JiraIssue>,
@@ -196,21 +233,34 @@ impl App {
         let has_gh = cli_detect::is_available("gh");
         let has_jira = cli_detect::is_available("acli");
         // Config github.repo overrides git remote detection
-        let gh_repo = project_config
-            .github_repo()
-            .map(String::from)
-            .or_else(|| {
-                if has_gh {
-                    cli_detect::detect_gh_repo(&project_cwd)
-                } else {
-                    None
-                }
-            });
+        let gh_repo = project_config.github_repo().map(String::from).or_else(|| {
+            if has_gh {
+                cli_detect::detect_gh_repo(&project_cwd)
+            } else {
+                None
+            }
+        });
         let gh_user = if has_gh {
             cli_detect::detect_gh_user()
         } else {
             None
         };
+
+        // Determine issues repo: config issues.repo > config github.repo > git remote
+        let gh_issues_repo = project_config
+            .github_issues_repo()
+            .map(String::from)
+            .or_else(|| gh_repo.clone());
+
+        // Check if issues should be shown: gh available, repo known, config enabled,
+        // and the repo actually has issues enabled on GitHub.
+        let gh_issues_enabled = has_gh
+            && gh_issues_repo.is_some()
+            && project_config.github_issues_enabled()
+            && gh_issues_repo
+                .as_deref()
+                .map(github::repo_has_issues)
+                .unwrap_or(false);
 
         let tail_lines = project_config.tail_lines();
 
@@ -289,6 +339,20 @@ impl App {
             gh_prev_updated: HashMap::new(),
             gh_new_activity: false,
 
+            gh_issues_enabled,
+            gh_issues_repo,
+            gh_issues: Vec::new(),
+            gh_issues_flat_list: Vec::new(),
+            gh_issues_index: 0,
+            gh_issues_pane: IssuesPane::List,
+            gh_issues_detail_scroll: 0,
+            gh_issues_last_poll: Instant::now(),
+            gh_issues_editing: false,
+            gh_issues_edit_mode: None,
+            gh_issues_edit_field: IssueEditField::Title,
+            gh_issues_title_editor: None,
+            gh_issues_body_editor: None,
+
             has_jira,
             jira_issues: Vec::new(),
             jira_flat_list: Vec::new(),
@@ -319,6 +383,9 @@ impl App {
         if self.has_gh && self.gh_repo.is_some() {
             tabs.push(ActiveTab::GitHubPRs);
         }
+        if self.gh_issues_enabled {
+            tabs.push(ActiveTab::GitHubIssues);
+        }
         if self.has_jira {
             tabs.push(ActiveTab::Jira);
         }
@@ -333,6 +400,7 @@ impl App {
         self.load_git_data();
         self.load_plans();
         self.load_github_prs();
+        self.load_github_issues();
         self.load_jira_issues();
         self.last_update = Instant::now();
     }
@@ -387,7 +455,8 @@ impl App {
             .join(&self.encoded_project);
         let transcript_path = project_dir.join(format!("{}.jsonl", session_id));
 
-        self.transcript_reader = transcripts::TranscriptReader::with_tail_lines(self.project_config.tail_lines());
+        self.transcript_reader =
+            transcripts::TranscriptReader::with_tail_lines(self.project_config.tail_lines());
         match self.transcript_reader.load_initial(&transcript_path) {
             Ok(()) => {
                 self.transcript_items = self.transcript_reader.items.clone();
@@ -405,7 +474,8 @@ impl App {
         self.subagents = subagents::find_subagents(&project_dir, &session_id);
         self.subagent_index = 0;
         self.subagent_transcript.clear();
-        self.subagent_reader = transcripts::TranscriptReader::with_tail_lines(self.project_config.tail_lines());
+        self.subagent_reader =
+            transcripts::TranscriptReader::with_tail_lines(self.project_config.tail_lines());
         self.viewing_subagent = false;
     }
 
@@ -590,7 +660,8 @@ impl App {
             return;
         }
         let path = self.subagents[self.subagent_index].path.clone();
-        self.subagent_reader = transcripts::TranscriptReader::with_tail_lines(self.project_config.tail_lines());
+        self.subagent_reader =
+            transcripts::TranscriptReader::with_tail_lines(self.project_config.tail_lines());
         match self.subagent_reader.load_initial(&path) {
             Ok(()) => {
                 self.subagent_transcript = self.subagent_reader.items.clone();
@@ -782,6 +853,14 @@ impl App {
                     self.gh_detail_scroll = self.gh_detail_scroll.saturating_add(1);
                 }
             },
+            ActiveTab::GitHubIssues => match self.gh_issues_pane {
+                IssuesPane::List => {
+                    self.issues_skip_to_next();
+                }
+                IssuesPane::Detail => {
+                    self.gh_issues_detail_scroll = self.gh_issues_detail_scroll.saturating_add(1);
+                }
+            },
             ActiveTab::Jira => match self.jira_pane {
                 JiraPane::List => {
                     self.jira_skip_to_next_issue();
@@ -876,6 +955,14 @@ impl App {
                     self.gh_detail_scroll = self.gh_detail_scroll.saturating_sub(1);
                 }
             },
+            ActiveTab::GitHubIssues => match self.gh_issues_pane {
+                IssuesPane::List => {
+                    self.issues_skip_to_prev();
+                }
+                IssuesPane::Detail => {
+                    self.gh_issues_detail_scroll = self.gh_issues_detail_scroll.saturating_sub(1);
+                }
+            },
             ActiveTab::Jira => match self.jira_pane {
                 JiraPane::List => {
                     self.jira_skip_to_prev_issue();
@@ -915,6 +1002,9 @@ impl App {
             }
             ActiveTab::GitHubPRs => {
                 self.gh_pane = GitHubPane::List;
+            }
+            ActiveTab::GitHubIssues => {
+                self.gh_issues_pane = IssuesPane::List;
             }
             ActiveTab::Jira => {
                 self.jira_pane = JiraPane::List;
@@ -956,6 +1046,9 @@ impl App {
             ActiveTab::GitHubPRs => {
                 self.gh_pane = GitHubPane::Detail;
             }
+            ActiveTab::GitHubIssues => {
+                self.gh_issues_pane = IssuesPane::Detail;
+            }
             ActiveTab::Jira => {
                 self.jira_pane = JiraPane::Detail;
             }
@@ -988,6 +1081,11 @@ impl App {
             ActiveTab::GitHubPRs => {
                 if self.gh_pane == GitHubPane::List {
                     self.gh_pane = GitHubPane::Detail;
+                }
+            }
+            ActiveTab::GitHubIssues => {
+                if self.gh_issues_pane == IssuesPane::List {
+                    self.gh_issues_pane = IssuesPane::Detail;
                 }
             }
             ActiveTab::Jira => {
@@ -1070,6 +1168,15 @@ impl App {
                 }
                 GitHubPane::Detail => {
                     self.gh_detail_scroll = 0;
+                }
+            },
+            ActiveTab::GitHubIssues => match self.gh_issues_pane {
+                IssuesPane::List => {
+                    self.gh_issues_index = 0;
+                    self.issues_skip_to_entry();
+                }
+                IssuesPane::Detail => {
+                    self.gh_issues_detail_scroll = 0;
                 }
             },
             ActiveTab::Jira => match self.jira_pane {
@@ -1192,6 +1299,24 @@ impl App {
                 }
                 GitHubPane::Detail => {
                     self.gh_detail_scroll = usize::MAX;
+                }
+            },
+            ActiveTab::GitHubIssues => match self.gh_issues_pane {
+                IssuesPane::List => {
+                    if !self.gh_issues_flat_list.is_empty() {
+                        self.gh_issues_index = self.gh_issues_flat_list.len() - 1;
+                        while self.gh_issues_index > 0
+                            && matches!(
+                                self.gh_issues_flat_list[self.gh_issues_index],
+                                FlatIssueItem::SectionHeader(_)
+                            )
+                        {
+                            self.gh_issues_index -= 1;
+                        }
+                    }
+                }
+                IssuesPane::Detail => {
+                    self.gh_issues_detail_scroll = usize::MAX;
                 }
             },
             ActiveTab::Jira => match self.jira_pane {
@@ -1582,6 +1707,212 @@ impl App {
     pub fn gh_open_selected(&self) {
         if let Some(pr) = self.gh_selected_pr() {
             cli_detect::open_url(&pr.url);
+        }
+    }
+
+    // --- GitHub Issues helpers ---
+
+    pub fn load_github_issues(&mut self) {
+        if !self.gh_issues_enabled {
+            return;
+        }
+        if let (Some(ref repo), Some(ref user)) = (&self.gh_issues_repo, &self.gh_user) {
+            let state = self.project_config.github_issues_state().to_string();
+            match github::list_issues(repo, &state) {
+                Ok(issues) => {
+                    self.gh_issues_flat_list = github::categorize_issues(&issues, user);
+                    self.gh_issues = issues;
+                    if self.gh_issues_index >= self.gh_issues_flat_list.len() {
+                        self.gh_issues_index = 0;
+                        self.issues_skip_to_entry();
+                    }
+                    self.gh_issues_last_poll = Instant::now();
+                }
+                Err(e) => {
+                    self.last_error = Some(format!("Issues: {}", e));
+                }
+            }
+        }
+    }
+
+    fn issues_skip_to_next(&mut self) {
+        if self.gh_issues_flat_list.is_empty() {
+            return;
+        }
+        let start = self.gh_issues_index + 1;
+        for i in start..self.gh_issues_flat_list.len() {
+            if matches!(self.gh_issues_flat_list[i], FlatIssueItem::Issue(_)) {
+                self.gh_issues_index = i;
+                return;
+            }
+        }
+    }
+
+    fn issues_skip_to_prev(&mut self) {
+        if self.gh_issues_index == 0 || self.gh_issues_flat_list.is_empty() {
+            return;
+        }
+        for i in (0..self.gh_issues_index).rev() {
+            if matches!(self.gh_issues_flat_list[i], FlatIssueItem::Issue(_)) {
+                self.gh_issues_index = i;
+                return;
+            }
+        }
+    }
+
+    fn issues_skip_to_entry(&mut self) {
+        if self.gh_issues_flat_list.is_empty() {
+            return;
+        }
+        let idx = self.gh_issues_index.min(self.gh_issues_flat_list.len() - 1);
+        if matches!(
+            self.gh_issues_flat_list[idx],
+            FlatIssueItem::SectionHeader(_)
+        ) {
+            for i in (idx + 1)..self.gh_issues_flat_list.len() {
+                if matches!(self.gh_issues_flat_list[i], FlatIssueItem::Issue(_)) {
+                    self.gh_issues_index = i;
+                    return;
+                }
+            }
+        }
+    }
+
+    pub fn issues_selected(&self) -> Option<&GitHubIssue> {
+        if self.gh_issues_flat_list.is_empty() {
+            return None;
+        }
+        let idx = self.gh_issues_index.min(self.gh_issues_flat_list.len() - 1);
+        match &self.gh_issues_flat_list[idx] {
+            FlatIssueItem::Issue(issue) => Some(issue),
+            _ => None,
+        }
+    }
+
+    pub fn issues_open_in_browser(&self) {
+        if let Some(issue) = self.issues_selected() {
+            cli_detect::open_url(&issue.url);
+        }
+    }
+
+    pub fn issues_start_create(&mut self) {
+        let mut title_ed = tui_textarea::TextArea::default();
+        title_ed.set_cursor_line_style(ratatui::style::Style::default());
+        let mut body_ed = tui_textarea::TextArea::default();
+        body_ed.set_cursor_line_style(ratatui::style::Style::default());
+        self.gh_issues_title_editor = Some(title_ed);
+        self.gh_issues_body_editor = Some(body_ed);
+        self.gh_issues_edit_mode = Some(IssueEditMode::Create);
+        self.gh_issues_edit_field = IssueEditField::Title;
+        self.gh_issues_editing = true;
+    }
+
+    pub fn issues_start_edit(&mut self) {
+        if let Some(issue) = self.issues_selected().cloned() {
+            let mut title_ed = tui_textarea::TextArea::default();
+            title_ed.set_cursor_line_style(ratatui::style::Style::default());
+            title_ed.insert_str(&issue.title);
+            title_ed.move_cursor(tui_textarea::CursorMove::Head);
+
+            let mut body_ed = tui_textarea::TextArea::default();
+            body_ed.set_cursor_line_style(ratatui::style::Style::default());
+            if let Some(ref body) = issue.body {
+                body_ed.insert_str(body);
+                body_ed.move_cursor(tui_textarea::CursorMove::Top);
+                body_ed.move_cursor(tui_textarea::CursorMove::Head);
+            }
+
+            self.gh_issues_title_editor = Some(title_ed);
+            self.gh_issues_body_editor = Some(body_ed);
+            self.gh_issues_edit_mode = Some(IssueEditMode::Edit(issue.number));
+            self.gh_issues_edit_field = IssueEditField::Title;
+            self.gh_issues_editing = true;
+        }
+    }
+
+    pub fn issues_start_comment(&mut self) {
+        if let Some(issue) = self.issues_selected().cloned() {
+            let title_ed = tui_textarea::TextArea::default();
+            let mut body_ed = tui_textarea::TextArea::default();
+            body_ed.set_cursor_line_style(ratatui::style::Style::default());
+            self.gh_issues_title_editor = Some(title_ed);
+            self.gh_issues_body_editor = Some(body_ed);
+            self.gh_issues_edit_mode = Some(IssueEditMode::Comment(issue.number));
+            self.gh_issues_edit_field = IssueEditField::Body;
+            self.gh_issues_editing = true;
+        }
+    }
+
+    pub fn issues_save_edit(&mut self) {
+        let Some(ref mode) = self.gh_issues_edit_mode.clone() else {
+            return;
+        };
+        let repo = match &self.gh_issues_repo {
+            Some(r) => r.clone(),
+            None => return,
+        };
+        let title = self
+            .gh_issues_title_editor
+            .as_ref()
+            .map(|e| e.lines().join(""))
+            .unwrap_or_default();
+        let body = self
+            .gh_issues_body_editor
+            .as_ref()
+            .map(|e| e.lines().join("\n"))
+            .unwrap_or_default();
+
+        let result = match mode {
+            IssueEditMode::Create => {
+                if title.trim().is_empty() {
+                    self.last_error = Some("Title cannot be empty".to_string());
+                    return;
+                }
+                github::create_issue(&repo, &title, &body)
+            }
+            IssueEditMode::Edit(number) => github::edit_issue(&repo, *number, &title, &body),
+            IssueEditMode::Comment(number) => {
+                if body.trim().is_empty() {
+                    self.last_error = Some("Comment cannot be empty".to_string());
+                    return;
+                }
+                github::comment_issue(&repo, *number, &body)
+            }
+        };
+
+        match result {
+            Ok(()) => {
+                self.issues_cancel_edit();
+                self.load_github_issues();
+            }
+            Err(e) => {
+                self.last_error = Some(format!("Issue save: {}", e));
+            }
+        }
+    }
+
+    pub fn issues_cancel_edit(&mut self) {
+        self.gh_issues_editing = false;
+        self.gh_issues_edit_mode = None;
+        self.gh_issues_title_editor = None;
+        self.gh_issues_body_editor = None;
+    }
+
+    pub fn issues_toggle_state(&mut self) {
+        let Some(issue) = self.issues_selected().cloned() else {
+            return;
+        };
+        let Some(ref repo) = self.gh_issues_repo.clone() else {
+            return;
+        };
+        let result = if issue.state == "OPEN" {
+            github::close_issue(repo, issue.number)
+        } else {
+            github::reopen_issue(repo, issue.number)
+        };
+        match result {
+            Ok(()) => self.load_github_issues(),
+            Err(e) => self.last_error = Some(format!("Issue state: {}", e)),
         }
     }
 

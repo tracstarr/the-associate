@@ -101,6 +101,13 @@ pub const PR_SIZE: Style = Style::new().fg(Color::Magenta);
 pub const PR_SECTION: Style = Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD);
 pub const PR_BADGE: Style = Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD);
 
+// GitHub Issues
+pub const ISSUE_OPEN: Style = Style::new().fg(Color::Green);
+pub const ISSUE_CLOSED: Style = Style::new().fg(Color::Magenta);
+pub const ISSUE_LABEL: Style = Style::new().fg(Color::Yellow);
+pub const ISSUE_SECTION: Style = Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD);
+pub const ISSUE_COMMENT_AUTHOR: Style = Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD);
+
 // Jira
 pub const JIRA_TODO: Style = Style::new()
     .fg(Color::DarkGray)
