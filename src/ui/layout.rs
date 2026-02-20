@@ -125,7 +125,12 @@ fn draw_content(f: &mut Frame, area: Rect, app: &App) {
 fn hint_text(app: &App) -> Vec<(&'static str, &'static str)> {
     let mut hints: Vec<(&str, &str)> = match app.active_tab {
         ActiveTab::Sessions => match app.sessions_pane {
-            SessionsPane::List => vec![("j/k", "nav"), ("Enter", "select"), ("d", "delete")],
+            SessionsPane::List => vec![
+                ("j/k", "nav"),
+                ("Enter", "select"),
+                ("o", "open in WT"),
+                ("d", "delete"),
+            ],
             SessionsPane::Transcript => vec![("f", "follow"), ("s", "subagent"), ("j/k", "scroll")],
         },
         ActiveTab::Teams => vec![
@@ -178,7 +183,7 @@ fn hint_text(app: &App) -> Vec<(&'static str, &'static str)> {
             ("r", "refresh"),
             ("p", "prompt"),
         ],
-        ActiveTab::Processes => vec![("j/k", "nav"), ("h/l", "panes"), ("x", "kill")],
+        ActiveTab::Processes => vec![("j/k", "nav"), ("h/l", "panes"), ("x", "kill"), ("s", "jump to session")],
     };
     hints.push(("^H", "help"));
     hints

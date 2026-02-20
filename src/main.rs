@@ -102,6 +102,7 @@ TUI KEYBINDINGS:
   Enter              Select item / open content pane
   g / G              Jump to top / bottom
   f                  Toggle follow mode (Sessions tab)
+  o                  Open session in new WT pane (Sessions tab)
   s                  Cycle subagent transcripts (Sessions tab)
   b                  Toggle file browser (Git tab)
   e                  Edit file (file browser, Content pane)
@@ -110,7 +111,7 @@ TUI KEYBINDINGS:
   e                  Edit issue (Issues tab) / file (browser)
   c                  Comment on issue (Issues tab)
   p                  Launch Claude Code prompt (PRs / Issues / Linear / Jira)
-  x                  Close/reopen issue (Issues tab)
+  x                  Close/reopen issue (Issues tab) / Kill process (Processes tab)
   d / Del            Delete file (Sessions / Teams / Todos / Plans)
   o                  Open in browser (PRs / Issues / Jira / Linear)
   r                  Refresh data (PRs / Issues / Jira / Linear)
@@ -466,12 +467,14 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             }
         }
 
-        // Subagent transcript cycling (Sessions tab)
+        // Subagent transcript cycling (Sessions tab) / Jump to session (Processes tab)
         KeyCode::Char('s') => {
             if app.active_tab == app::ActiveTab::Sessions
                 && app.sessions_pane == app::SessionsPane::Transcript
             {
                 app.cycle_subagent();
+            } else if app.active_tab == app::ActiveTab::Processes {
+                app.jump_to_process_session();
             }
         }
 
@@ -525,19 +528,20 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             _ => {}
         },
 
-        // Close/reopen issue (Issues tab)
-        KeyCode::Char('x') => {
-            if app.active_tab == app::ActiveTab::GitHubIssues {
-                app.issues_toggle_state();
-            }
-        }
+        // Close/reopen issue (Issues tab) / Kill process (Processes tab)
+        KeyCode::Char('x') => match app.active_tab {
+            app::ActiveTab::GitHubIssues => app.issues_toggle_state(),
+            app::ActiveTab::Processes => app.kill_selected_process(),
+            _ => {}
+        },
 
-        // Open in browser
+        // Open in browser / open session in WT pane
         KeyCode::Char('o') => match app.active_tab {
             app::ActiveTab::GitHubPRs => app.gh_open_selected(),
             app::ActiveTab::GitHubIssues => app.issues_open_in_browser(),
             app::ActiveTab::Jira => app.jira_open_selected(),
             app::ActiveTab::Linear => app.linear_open_selected(),
+            app::ActiveTab::Sessions => app.open_session_in_wt(),
             _ => {}
         },
 
@@ -562,13 +566,6 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             if app.active_tab == app::ActiveTab::Jira {
                 app.jira_search_mode = true;
                 app.jira_search_input.clear();
-            }
-        }
-
-        // Kill selected process (Processes tab)
-        KeyCode::Char('x') => {
-            if app.active_tab == app::ActiveTab::Processes {
-                app.kill_selected_process();
             }
         }
 
