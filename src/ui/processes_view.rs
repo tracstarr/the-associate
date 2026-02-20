@@ -195,9 +195,12 @@ fn draw_process_output(f: &mut Frame, area: Rect, app: &App) {
 }
 
 fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
+    let char_count = s.chars().count();
+    if char_count <= max {
         s.to_string()
     } else {
-        format!("{}...", &s[..max.saturating_sub(3)])
+        let cut = max.saturating_sub(3);
+        let end = s.char_indices().nth(cut).map(|(i, _)| i).unwrap_or(s.len());
+        format!("{}...", &s[..end])
     }
 }
