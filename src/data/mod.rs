@@ -7,6 +7,8 @@ pub mod jira;
 pub mod linear;
 pub mod path_encoding;
 pub mod plans;
+pub mod process_runner;
+pub mod prompt_builder;
 pub mod sessions;
 pub mod subagents;
 pub mod tasks;

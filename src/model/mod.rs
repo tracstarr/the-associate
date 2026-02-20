@@ -6,6 +6,7 @@ pub mod inbox;
 pub mod jira;
 pub mod linear;
 pub mod plan;
+pub mod process;
 pub mod session;
 pub mod task;
 pub mod team;

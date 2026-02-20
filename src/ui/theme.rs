@@ -131,3 +131,16 @@ pub const JIRA_STORY: Style = Style::new().fg(Color::Green);
 pub const JIRA_TASK: Style = Style::new().fg(Color::Blue);
 pub const JIRA_SEARCH_INPUT: Style = Style::new().fg(Color::Yellow);
 pub const JIRA_TRANSITION_POPUP: Style = Style::new().fg(Color::White).bg(Color::DarkGray);
+
+// Processes tab
+pub const PROCESS_RUNNING: Style = Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD);
+pub const PROCESS_COMPLETED: Style = Style::new().fg(Color::Green).add_modifier(Modifier::BOLD);
+pub const PROCESS_FAILED: Style = Style::new().fg(Color::Red).add_modifier(Modifier::BOLD);
+pub const PROCESS_STDOUT: Style = Style::new().fg(Color::White);
+pub const PROCESS_STDERR: Style = Style::new().fg(Color::Red);
+pub const PROCESS_STDERR_HEADER: Style = Style::new().fg(Color::Red).add_modifier(Modifier::BOLD);
+
+// Prompt modal
+pub const PROMPT_MODAL_BORDER: Style = Style::new().fg(Color::Cyan);
+pub const PROMPT_EDITOR_TEXT: Style = Style::new().fg(Color::White);
+pub const PROMPT_CURSOR_LINE: Style = Style::new().bg(Color::DarkGray);

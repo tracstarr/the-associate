@@ -8,7 +8,7 @@ use super::theme;
 pub fn draw_help(f: &mut Frame, area: Rect) {
     // Center a box
     let width = 60u16.min(area.width.saturating_sub(4));
-    let height = 34u16.min(area.height.saturating_sub(4));
+    let height = 36u16.min(area.height.saturating_sub(4));
 
     let vert = Layout::default()
         .direction(Direction::Vertical)
@@ -53,6 +53,7 @@ pub fn draw_help(f: &mut Frame, area: Rect) {
         ("r", "Refresh (PRs / Issues / Jira / Linear)"),
         ("t", "Show transitions (Jira)"),
         ("/", "Search (Jira)"),
+        ("c", "Comment (Issues) / Launch Claude (PRs / Jira)"),
         ("d / Del", "Delete file (Sessions/Teams/Todos/Plans)"),
         ("? / Ctrl-H", "Toggle this help"),
         ("q / Ctrl+C", "Quit"),
