@@ -662,19 +662,11 @@
 
       <div class="code-block">irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1 | iex</div>
 
-      <p>If you built from source, pull the latest changes and rebuild:</p>
-
-      <div class="code-block">./install.sh update</div>
-
       <h3>Uninstall</h3>
 
       <p>Remove The Associate and clean up the PATH entry:</p>
 
       <div class="code-block">$env:ASSOC_ACTION='uninstall'; irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1 | iex</div>
-
-      <p>If you built from source:</p>
-
-      <div class="code-block">./install.sh uninstall</div>
 
       <h3>Build from source</h3>
 
@@ -686,9 +678,11 @@ export PATH="/c/Users/$USER/.cargo/bin:$PATH:/c/msys64/mingw64/bin"
 <span class="comment"># Build the optimized release binary</span>
 cargo build --release</div>
 
-      <p>The binary will be at <code>target/release/assoc.exe</code>. Copy it to a directory on your PATH for easy access. Alternatively, use the install script to build and install in one step:</p>
+      <p>The binary will be at <code>target/release/assoc.exe</code>. Copy it to a directory on your PATH for easy access.</p>
 
-      <div class="code-block">./install.sh</div>
+      <div class="callout callout-info">
+        <p><strong>MSYS2 users:</strong> A bash install script is included for convenience. Run <code>./install.sh</code> to build and install to <code>~/.local/bin</code>. It also supports <code>./install.sh update</code> (pull + rebuild) and <code>./install.sh uninstall</code>.</p>
+      </div>
 
       <div class="callout callout-info">
         <p><strong>Note:</strong> The release profile uses <code>strip = true</code>, <code>lto = true</code>, and <code>opt-level = "z"</code> for a small, optimized binary.</p>

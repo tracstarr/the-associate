@@ -35,24 +35,12 @@ Re-run the install command to update to the latest release:
 irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1 | iex
 ```
 
-If you built from source, pull the latest changes and rebuild:
-
-```bash
-./install.sh update
-```
-
 ### Uninstall
 
 Remove The Associate and clean up the PATH entry:
 
 ```powershell
 $env:ASSOC_ACTION='uninstall'; irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1 | iex
-```
-
-If you built from source:
-
-```bash
-./install.sh uninstall
 ```
 
 ### Build from source
@@ -67,11 +55,9 @@ export PATH="/c/Users/$USER/.cargo/bin:$PATH:/c/msys64/mingw64/bin"
 cargo build --release
 ```
 
-The binary will be at `target/release/assoc.exe`. Copy it to a directory on your PATH for easy access. Alternatively, use the install script to build and install in one step:
+The binary will be at `target/release/assoc.exe`. Copy it to a directory on your PATH for easy access.
 
-```bash
-./install.sh
-```
+> **MSYS2 users:** A bash install script is included for convenience. Run `./install.sh` to build and install to `~/.local/bin`. It also supports `./install.sh update` (pull + rebuild) and `./install.sh uninstall`.
 
 > **Note:** The release profile uses `strip = true`, `lto = true`, and `opt-level = "z"` for a small, optimized binary.
 
