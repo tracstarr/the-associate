@@ -110,8 +110,9 @@ TUI KEYBINDINGS:
   e                  Edit issue (Issues tab) / file (browser)
   c                  Comment on issue (Issues tab)
   x                  Close/reopen issue (Issues tab)
-  o                  Open in browser (PRs / Issues / Jira)
-  r                  Refresh data (PRs / Issues / Jira)
+  d / Del            Delete file (Sessions / Teams / Todos / Plans)
+  o                  Open in browser (PRs / Issues / Jira / Linear)
+  r                  Refresh data (PRs / Issues / Jira / Linear)
   t                  Show transitions (Jira)
   /                  Search issues (Jira)
   ?                  Toggle help overlay
@@ -355,6 +356,16 @@ fn handle_key(app: &mut App, key: KeyEvent) {
         return;
     }
 
+    // Delete confirmation dialog
+    if app.confirm_delete {
+        match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => app.execute_delete(),
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => app.cancel_delete(),
+            _ => {}
+        }
+        return;
+    }
+
     // File browser edit mode — pass keys to TextArea
     if app.fb_editing {
         handle_fb_edit_key(app, key);
@@ -532,6 +543,15 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                 app.jira_search_input.clear();
             }
         }
+
+        // Delete file
+        KeyCode::Char('d') | KeyCode::Delete => match app.active_tab {
+            app::ActiveTab::Todos
+            | app::ActiveTab::Plans
+            | app::ActiveTab::Sessions
+            | app::ActiveTab::Teams => app.request_delete(),
+            _ => {}
+        },
 
         _ => {}
     }
