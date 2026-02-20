@@ -4,7 +4,7 @@ use std::process::{Child, Command};
 use std::sync::mpsc;
 use std::time::Instant;
 
-use crate::config::{self, ProjectConfig, TabsConfig};
+use crate::config::{self, ProjectConfig};
 use crate::data::{
     cli_detect, filebrowser, git, github, inboxes, jira, linear, path_encoding, plans,
     process_runner::{self, ProcessOutput},
@@ -130,7 +130,6 @@ pub struct App {
 
     // Config
     pub project_config: ProjectConfig,
-    pub tabs_config: TabsConfig,
 
     // Paths
     pub project_cwd: PathBuf,
@@ -278,16 +277,14 @@ impl App {
         let claude_home = config::claude_home();
         let encoded_project = path_encoding::encode_project_path(&project_cwd);
         let project_config = config::load_project_config(&project_cwd);
-        let tabs_config = project_config.tabs_config();
 
-        // Skip CLI detection entirely when both GitHub tabs are disabled
-        let gh_tabs_wanted = tabs_config.github_prs.unwrap_or(true)
-            || tabs_config.github_issues.unwrap_or(true);
+        // Skip CLI detection entirely when associated tabs are disabled
+        let gh_tabs_wanted =
+            project_config.tabs.github_prs() || project_config.tabs.github_issues();
         let has_gh = gh_tabs_wanted && cli_detect::is_available("gh");
-        let has_jira =
-            tabs_config.jira.unwrap_or(true) && cli_detect::is_available("acli");
+        let has_jira = project_config.tabs.jira() && cli_detect::is_available("acli");
         let has_linear =
-            tabs_config.linear.unwrap_or(true) && project_config.linear_api_key().is_some();
+            project_config.tabs.linear() && project_config.linear_api_key().is_some();
         let has_claude = cli_detect::is_available("claude");
         // Config github.repo overrides git remote detection
         let gh_repo = project_config.github_repo().map(String::from).or_else(|| {
@@ -323,7 +320,6 @@ impl App {
             show_help: false,
 
             project_config,
-            tabs_config,
             project_cwd,
             claude_home,
             encoded_project,
@@ -460,17 +456,17 @@ impl App {
 
     /// Check whether a tab is enabled via the `[tabs]` config section.
     pub fn is_tab_enabled(&self, tab: &ActiveTab) -> bool {
-        let tc = &self.tabs_config;
+        let tc = &self.project_config.tabs;
         match tab {
-            ActiveTab::Sessions => tc.sessions.unwrap_or(true),
-            ActiveTab::Teams => tc.teams.unwrap_or(true),
-            ActiveTab::Todos => tc.todos.unwrap_or(true),
-            ActiveTab::Git => tc.git.unwrap_or(true),
-            ActiveTab::Plans => tc.plans.unwrap_or(true),
-            ActiveTab::GitHubPRs => tc.github_prs.unwrap_or(true),
-            ActiveTab::GitHubIssues => tc.github_issues.unwrap_or(true),
-            ActiveTab::Jira => tc.jira.unwrap_or(true),
-            ActiveTab::Linear => tc.linear.unwrap_or(true),
+            ActiveTab::Sessions => tc.sessions(),
+            ActiveTab::Teams => tc.teams(),
+            ActiveTab::Todos => tc.todos(),
+            ActiveTab::Git => tc.git(),
+            ActiveTab::Plans => tc.plans(),
+            ActiveTab::GitHubPRs => tc.github_prs(),
+            ActiveTab::GitHubIssues => tc.github_issues(),
+            ActiveTab::Jira => tc.jira(),
+            ActiveTab::Linear => tc.linear(),
             ActiveTab::Processes => true,
         }
     }
@@ -823,45 +819,94 @@ impl App {
     /// Handle a file change event from the watcher.
     /// Skips processing if the associated tab is disabled.
     pub fn handle_file_change(&mut self, change: FileChange) {
-        match change {
-            FileChange::SessionIndex if self.is_tab_enabled(&ActiveTab::Sessions) => {
-                self.load_sessions();
+        let handled = match change {
+            FileChange::SessionIndex => {
+                if self.is_tab_enabled(&ActiveTab::Sessions) {
+                    self.load_sessions();
+                    true
+                } else {
+                    false
+                }
             }
-            FileChange::Transcript(_) if self.is_tab_enabled(&ActiveTab::Sessions) => {
-                self.refresh_transcript();
+            FileChange::Transcript(_) => {
+                if self.is_tab_enabled(&ActiveTab::Sessions) {
+                    self.refresh_transcript();
+                    true
+                } else {
+                    false
+                }
             }
-            FileChange::SubagentTranscript(_) if self.is_tab_enabled(&ActiveTab::Sessions) => {
-                self.refresh_subagent_transcript();
+            FileChange::SubagentTranscript(_) => {
+                if self.is_tab_enabled(&ActiveTab::Sessions) {
+                    self.refresh_subagent_transcript();
+                    true
+                } else {
+                    false
+                }
             }
-            FileChange::TeamConfig(_) if self.is_tab_enabled(&ActiveTab::Teams) => {
-                self.load_teams();
+            FileChange::TeamConfig(_) => {
+                if self.is_tab_enabled(&ActiveTab::Teams) {
+                    self.load_teams();
+                    true
+                } else {
+                    false
+                }
             }
-            FileChange::TeamInbox(_, _) if self.is_tab_enabled(&ActiveTab::Teams) => {
-                self.load_inbox_for_selected_member();
-                self.compute_agent_statuses();
+            FileChange::TeamInbox(_, _) => {
+                if self.is_tab_enabled(&ActiveTab::Teams) {
+                    self.load_inbox_for_selected_member();
+                    self.compute_agent_statuses();
+                    true
+                } else {
+                    false
+                }
             }
-            FileChange::TaskFile(_) if self.is_tab_enabled(&ActiveTab::Teams) => {
-                self.load_tasks_for_selected_team();
-                self.compute_agent_statuses();
+            FileChange::TaskFile(_) => {
+                if self.is_tab_enabled(&ActiveTab::Teams) {
+                    self.load_tasks_for_selected_team();
+                    self.compute_agent_statuses();
+                    true
+                } else {
+                    false
+                }
             }
-            FileChange::TodoFile(_) if self.is_tab_enabled(&ActiveTab::Todos) => {
-                self.load_todos();
+            FileChange::TodoFile(_) => {
+                if self.is_tab_enabled(&ActiveTab::Todos) {
+                    self.load_todos();
+                    true
+                } else {
+                    false
+                }
             }
-            FileChange::GitChange if self.is_tab_enabled(&ActiveTab::Git) => {
-                self.load_git_data();
+            FileChange::GitChange => {
+                if self.is_tab_enabled(&ActiveTab::Git) {
+                    self.load_git_data();
+                    true
+                } else {
+                    false
+                }
             }
-            FileChange::PlanFile(_) if self.is_tab_enabled(&ActiveTab::Plans) => {
-                self.load_plans();
+            FileChange::PlanFile(_) => {
+                if self.is_tab_enabled(&ActiveTab::Plans) {
+                    self.load_plans();
+                    true
+                } else {
+                    false
+                }
             }
-            _ => return, // Tab disabled — skip update
+        };
+        if handled {
+            self.last_update = Instant::now();
         }
-        self.last_update = Instant::now();
     }
 
     // --- Navigation helpers ---
 
     pub fn next_tab(&mut self) {
         let tabs = self.visible_tabs();
+        if tabs.len() <= 1 {
+            return;
+        }
         if let Some(idx) = tabs.iter().position(|t| *t == self.active_tab) {
             let next = (idx + 1) % tabs.len();
             self.on_tab_switch(&tabs[next]);
@@ -871,6 +916,9 @@ impl App {
 
     pub fn prev_tab(&mut self) {
         let tabs = self.visible_tabs();
+        if tabs.len() <= 1 {
+            return;
+        }
         if let Some(idx) = tabs.iter().position(|t| *t == self.active_tab) {
             let prev = if idx == 0 { tabs.len() - 1 } else { idx - 1 };
             self.on_tab_switch(&tabs[prev]);
@@ -879,8 +927,10 @@ impl App {
     }
 
     pub fn switch_to_tab(&mut self, tab: ActiveTab) {
-        self.on_tab_switch(&tab);
-        self.active_tab = tab;
+        if self.is_tab_enabled(&tab) {
+            self.on_tab_switch(&tab);
+            self.active_tab = tab;
+        }
     }
 
     fn on_tab_switch(&mut self, target: &ActiveTab) {

@@ -33,38 +33,53 @@ pub struct ProjectConfig {
     pub jira: Option<JiraConfig>,
     pub linear: Option<LinearConfig>,
     pub display: Option<DisplayConfig>,
-    pub tabs: Option<TabsConfig>,
+    #[serde(default)]
+    pub tabs: TabsConfig,
 }
 
 /// Per-tab enable/disable configuration.
 /// All tabs default to enabled (`true`). Set a tab to `false` to disable it
 /// entirely — its data won't be loaded, watched, or polled.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct TabsConfig {
-    pub sessions: Option<bool>,
-    pub teams: Option<bool>,
-    pub todos: Option<bool>,
-    pub git: Option<bool>,
-    pub plans: Option<bool>,
-    pub github_prs: Option<bool>,
-    pub github_issues: Option<bool>,
-    pub jira: Option<bool>,
-    pub linear: Option<bool>,
+    sessions: Option<bool>,
+    teams: Option<bool>,
+    todos: Option<bool>,
+    git: Option<bool>,
+    plans: Option<bool>,
+    github_prs: Option<bool>,
+    github_issues: Option<bool>,
+    jira: Option<bool>,
+    linear: Option<bool>,
 }
 
-impl Default for TabsConfig {
-    fn default() -> Self {
-        Self {
-            sessions: None,
-            teams: None,
-            todos: None,
-            git: None,
-            plans: None,
-            github_prs: None,
-            github_issues: None,
-            jira: None,
-            linear: None,
-        }
+impl TabsConfig {
+    pub fn sessions(&self) -> bool {
+        self.sessions.unwrap_or(true)
+    }
+    pub fn teams(&self) -> bool {
+        self.teams.unwrap_or(true)
+    }
+    pub fn todos(&self) -> bool {
+        self.todos.unwrap_or(true)
+    }
+    pub fn git(&self) -> bool {
+        self.git.unwrap_or(true)
+    }
+    pub fn plans(&self) -> bool {
+        self.plans.unwrap_or(true)
+    }
+    pub fn github_prs(&self) -> bool {
+        self.github_prs.unwrap_or(true)
+    }
+    pub fn github_issues(&self) -> bool {
+        self.github_issues.unwrap_or(true)
+    }
+    pub fn jira(&self) -> bool {
+        self.jira.unwrap_or(true)
+    }
+    pub fn linear(&self) -> bool {
+        self.linear.unwrap_or(true)
     }
 }
 
@@ -104,10 +119,6 @@ pub struct DisplayConfig {
 }
 
 impl ProjectConfig {
-    pub fn tabs_config(&self) -> TabsConfig {
-        self.tabs.clone().unwrap_or_default()
-    }
-
     pub fn tick_rate(&self) -> u64 {
         self.display
             .as_ref()

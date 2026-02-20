@@ -266,7 +266,7 @@ fn run_app(
         app.encoded_project.clone(),
         app.project_cwd.clone(),
         tx,
-        &app.tabs_config,
+        &app.project_config.tabs,
     )?;
 
     let tick_rate = Duration::from_millis(app.project_config.tick_rate());

@@ -17,11 +17,11 @@ pub fn start_watcher(
     tx: mpsc::Sender<AppEvent>,
     tabs_config: &TabsConfig,
 ) -> Result<notify_debouncer_mini::Debouncer<notify::RecommendedWatcher>> {
-    let sessions_enabled = tabs_config.sessions.unwrap_or(true);
-    let teams_enabled = tabs_config.teams.unwrap_or(true);
-    let todos_enabled = tabs_config.todos.unwrap_or(true);
-    let git_enabled = tabs_config.git.unwrap_or(true);
-    let plans_enabled = tabs_config.plans.unwrap_or(true);
+    let sessions_enabled = tabs_config.sessions();
+    let teams_enabled = tabs_config.teams();
+    let todos_enabled = tabs_config.todos();
+    let git_enabled = tabs_config.git();
+    let plans_enabled = tabs_config.plans();
 
     let project_dir = claude_home.join("projects").join(&encoded_project);
     let teams_dir = claude_home.join("teams");
