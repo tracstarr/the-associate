@@ -397,6 +397,12 @@ fn handle_key(app: &mut App, key: KeyEvent) {
         return;
     }
 
+    // Prompt picker — select from available prompts
+    if app.show_prompt_picker {
+        handle_prompt_picker_key(app, key);
+        return;
+    }
+
     // Prompt modal — pass keys to prompt editor
     if app.show_prompt_modal {
         handle_prompt_modal_key(app, key);
@@ -669,6 +675,26 @@ fn handle_issues_edit_key(app: &mut App, key: KeyEvent) {
                 }
             }
         }
+    }
+}
+
+fn handle_prompt_picker_key(app: &mut App, key: KeyEvent) {
+    match key.code {
+        KeyCode::Char('j') | KeyCode::Down => {
+            if app.prompt_picker_index + 1 < app.prompt_picker_len() {
+                app.prompt_picker_index += 1;
+            }
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            app.prompt_picker_index = app.prompt_picker_index.saturating_sub(1);
+        }
+        KeyCode::Enter => {
+            app.confirm_prompt_picker();
+        }
+        KeyCode::Esc => {
+            app.cancel_prompt_picker();
+        }
+        _ => {}
     }
 }
 

@@ -58,6 +58,11 @@ pub fn draw_layout(f: &mut Frame, app: &App) {
         help_overlay::draw_help(f, f.area());
     }
 
+    // Prompt picker (on top of everything, before prompt modal)
+    if app.show_prompt_picker {
+        prompt_modal::draw_prompt_picker(f, f.area(), app);
+    }
+
     // Prompt modal (on top of everything)
     if app.show_prompt_modal {
         prompt_modal::draw_prompt_modal(f, f.area(), app);

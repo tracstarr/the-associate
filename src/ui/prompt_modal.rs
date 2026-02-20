@@ -1,4 +1,5 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui::Frame;
@@ -89,4 +90,99 @@ pub fn draw_prompt_modal(f: &mut Frame, area: Rect, app: &App) {
         .border_style(theme::PROMPT_MODAL_BORDER);
     let hint_paragraph = Paragraph::new(hints).block(hint_block);
     f.render_widget(hint_paragraph, hint_area);
+}
+
+/// Draw the prompt picker overlay — a small list of available prompts.
+pub fn draw_prompt_picker(f: &mut Frame, area: Rect, app: &App) {
+    let item_count = app.prompt_picker_len();
+    // Height: 1 line per item + 2 for borders + 2 for title/hint
+    let content_height = (item_count as u16).min(20);
+    let height = content_height + 4;
+    let width = 60u16.min(area.width.saturating_sub(4));
+
+    let vert = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(area.height.saturating_sub(height) / 2),
+            Constraint::Length(height),
+            Constraint::Min(0),
+        ])
+        .split(area);
+
+    let horiz = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(area.width.saturating_sub(width) / 2),
+            Constraint::Length(width),
+            Constraint::Min(0),
+        ])
+        .split(vert[1]);
+
+    let popup_area = horiz[1];
+    f.render_widget(Clear, popup_area);
+
+    // Build lines: "Default (from ticket)" first, then custom prompts
+    let mut lines: Vec<Line> = Vec::with_capacity(item_count);
+
+    let default_style = if app.prompt_picker_index == 0 {
+        Style::new().fg(ratatui::style::Color::White).bg(ratatui::style::Color::DarkGray).add_modifier(Modifier::BOLD)
+    } else {
+        Style::new().fg(ratatui::style::Color::White)
+    };
+    let prefix = if app.prompt_picker_index == 0 { "> " } else { "  " };
+    lines.push(Line::from(Span::styled(
+        format!("{}Default (from ticket)", prefix),
+        default_style,
+    )));
+
+    for (i, cp) in app.project_config.prompts.iter().enumerate() {
+        let idx = i + 1;
+        let style = if app.prompt_picker_index == idx {
+            Style::new().fg(ratatui::style::Color::White).bg(ratatui::style::Color::DarkGray).add_modifier(Modifier::BOLD)
+        } else {
+            Style::new().fg(ratatui::style::Color::White)
+        };
+        let pfx = if app.prompt_picker_index == idx { "> " } else { "  " };
+        lines.push(Line::from(Span::styled(
+            format!("{}{}", pfx, cp.title),
+            style,
+        )));
+    }
+
+    // Split popup into title, list, hint
+    let inner = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2),           // title
+            Constraint::Length(content_height), // list
+            Constraint::Length(2),           // hints
+        ])
+        .split(popup_area);
+
+    // Title
+    let title_block = Block::default()
+        .title(" Select Prompt ")
+        .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
+        .border_style(theme::PROMPT_MODAL_BORDER);
+    f.render_widget(Paragraph::new("").block(title_block), inner[0]);
+
+    // List
+    let list_block = Block::default()
+        .borders(Borders::LEFT | Borders::RIGHT)
+        .border_style(theme::PROMPT_MODAL_BORDER);
+    f.render_widget(Paragraph::new(lines).block(list_block), inner[1]);
+
+    // Hints
+    let hints = Line::from(vec![
+        Span::styled(" Enter", theme::HELP_KEY),
+        Span::styled(": Select  ", theme::HELP_DESC),
+        Span::styled("j/k", theme::HELP_KEY),
+        Span::styled(": Navigate  ", theme::HELP_DESC),
+        Span::styled("Esc", theme::HELP_KEY),
+        Span::styled(": Cancel ", theme::HELP_DESC),
+    ]);
+    let hint_block = Block::default()
+        .borders(Borders::BOTTOM | Borders::LEFT | Borders::RIGHT)
+        .border_style(theme::PROMPT_MODAL_BORDER);
+    f.render_widget(Paragraph::new(hints).block(hint_block), inner[2]);
 }
