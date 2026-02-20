@@ -35,6 +35,7 @@ pub struct ProjectConfig {
     pub display: Option<DisplayConfig>,
     #[serde(default)]
     pub tabs: TabsConfig,
+    pub pane: Option<PaneConfig>,
 }
 
 /// Per-tab enable/disable configuration.
@@ -118,6 +119,12 @@ pub struct DisplayConfig {
     pub tail_lines: Option<usize>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct PaneConfig {
+    /// Direction to move-focus to reach the Claude Code pane (right, left, up, down).
+    pub direction: Option<String>,
+}
+
 impl ProjectConfig {
     pub fn tick_rate(&self) -> u64 {
         self.display
@@ -181,6 +188,13 @@ impl ProjectConfig {
 
     pub fn linear_team(&self) -> Option<&str> {
         self.linear.as_ref().and_then(|l| l.team.as_deref())
+    }
+
+    pub fn send_direction(&self) -> &str {
+        self.pane
+            .as_ref()
+            .and_then(|p| p.direction.as_deref())
+            .unwrap_or("right")
     }
 }
 

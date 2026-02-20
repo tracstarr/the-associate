@@ -5,6 +5,8 @@ use std::path::PathBuf;
 pub enum AppEvent {
     /// A watched file was created or modified.
     FileChanged(FileChange),
+    /// Pane send completed: None = success, Some = error message.
+    PaneSendComplete(Option<String>),
 }
 
 /// Categorized file change from the watcher.

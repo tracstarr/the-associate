@@ -3,6 +3,7 @@ mod config;
 mod data;
 mod event;
 mod model;
+mod pane_send;
 mod ui;
 mod watcher;
 
@@ -38,6 +39,10 @@ struct Cli {
     /// Project directory to monitor (defaults to current directory)
     #[arg(long, global = true)]
     cwd: Option<PathBuf>,
+
+    /// Indicate that exactly two WT panes are open (enables pane-send with 'i')
+    #[arg(long, global = true)]
+    two_pane: bool,
 }
 
 #[derive(clap::Subcommand)]
@@ -117,6 +122,7 @@ TUI KEYBINDINGS:
   r                  Refresh data (PRs / Issues / Jira / Linear)
   t                  Show transitions (Jira)
   /                  Search issues (Jira)
+  i                  Send input to Claude pane
   ?                  Toggle help overlay
   q / Ctrl+C         Quit
 
@@ -138,7 +144,7 @@ fn main() -> Result<()> {
             rows,
             claude_args,
         }) => launch_wt(&project_cwd, resume, claude_ratio, cols, rows, &claude_args),
-        None => run_tui(project_cwd),
+        None => run_tui(project_cwd, cli.two_pane),
     }
 }
 
@@ -159,7 +165,7 @@ fn resolve_cwd(cwd: Option<PathBuf>) -> Result<PathBuf> {
     }
 }
 
-fn run_tui(project_cwd: PathBuf) -> Result<()> {
+fn run_tui(project_cwd: PathBuf, two_pane: bool) -> Result<()> {
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -168,7 +174,7 @@ fn run_tui(project_cwd: PathBuf) -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     // Run app
-    let result = run_app(&mut terminal, project_cwd);
+    let result = run_app(&mut terminal, project_cwd, two_pane);
 
     // Restore terminal
     disable_raw_mode()?;
@@ -223,6 +229,7 @@ fn launch_wt(
         .arg(&self_exe)
         .arg("--cwd")
         .arg(&*dir)
+        .arg("--two-pane")
         .arg(";")
         .arg("split-pane")
         .arg("-V")
@@ -253,14 +260,17 @@ fn launch_wt(
 fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     project_cwd: PathBuf,
+    two_pane: bool,
 ) -> Result<()> {
     let mut app = App::new(project_cwd);
+    app.two_pane = two_pane;
 
     // Initial data load
     app.load_all();
 
     // Setup file watcher (skips directories for disabled tabs)
     let (tx, rx) = mpsc::channel::<AppEvent>();
+    app.event_tx = Some(tx.clone());
     let _debouncer = watcher::start_watcher(
         app.claude_home.clone(),
         app.encoded_project.clone(),
@@ -289,10 +299,11 @@ fn run_app(
             }
         }
 
-        // Check for file watcher events
+        // Check for file watcher and pane send events
         while let Ok(evt) = rx.try_recv() {
-            if let AppEvent::FileChanged(change) = evt {
-                app.handle_file_change(change);
+            match evt {
+                AppEvent::FileChanged(change) => app.handle_file_change(change),
+                AppEvent::PaneSendComplete(err) => app.handle_send_complete(err),
             }
         }
 
@@ -336,6 +347,9 @@ fn run_app(
 
             // Poll spawned process output
             app.poll_process_output();
+
+            // Clear stale send status
+            app.clear_stale_send_status();
         }
 
         if app.should_quit {
@@ -386,6 +400,12 @@ fn handle_key(app: &mut App, key: KeyEvent) {
     // Prompt modal — pass keys to prompt editor
     if app.show_prompt_modal {
         handle_prompt_modal_key(app, key);
+        return;
+    }
+
+    // Pane send input mode
+    if app.send_mode {
+        handle_send_key(app, key);
         return;
     }
 
@@ -590,6 +610,31 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             _ => {}
         },
 
+        // Send to Claude pane
+        KeyCode::Char('i') => {
+            if !app.send_pending {
+                app.start_send_mode();
+            }
+        }
+
+        _ => {}
+    }
+}
+
+fn handle_send_key(app: &mut App, key: KeyEvent) {
+    match key.code {
+        KeyCode::Esc => {
+            app.cancel_send_mode();
+        }
+        KeyCode::Enter => {
+            app.execute_send();
+        }
+        KeyCode::Backspace => {
+            app.send_input.pop();
+        }
+        KeyCode::Char(c) => {
+            app.send_input.push(c);
+        }
         _ => {}
     }
 }
