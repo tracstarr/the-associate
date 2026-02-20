@@ -159,3 +159,10 @@ pub const PROCESS_STDERR_HEADER: Style = Style::new().fg(Color::Red).add_modifie
 pub const PROMPT_MODAL_BORDER: Style = Style::new().fg(Color::Cyan);
 pub const PROMPT_EDITOR_TEXT: Style = Style::new().fg(Color::White);
 pub const PROMPT_CURSOR_LINE: Style = Style::new().bg(Color::DarkGray);
+
+// Current issue highlight
+pub const CURRENT_ISSUE: Style = Style::new()
+    .fg(Color::Black)
+    .bg(Color::Yellow)
+    .add_modifier(Modifier::BOLD);
+pub const CURRENT_ISSUE_HEADER: Style = Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD);

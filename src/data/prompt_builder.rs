@@ -34,7 +34,12 @@ pub fn ticket_from_github_issue(issue: &GitHubIssue) -> TicketInfo {
     extra.push(("Author".to_string(), issue.author.login.clone()));
     extra.push(("State".to_string(), issue.state.clone()));
     if !issue.assignees.is_empty() {
-        let assignees = issue.assignees.iter().map(|a| a.login.clone()).collect::<Vec<_>>().join(", ");
+        let assignees = issue
+            .assignees
+            .iter()
+            .map(|a| a.login.clone())
+            .collect::<Vec<_>>()
+            .join(", ");
         extra.push(("Assignees".to_string(), assignees));
     }
     if let Some(ref ms) = issue.milestone {

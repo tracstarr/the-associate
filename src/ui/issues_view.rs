@@ -48,25 +48,39 @@ fn draw_issue_list(f: &mut Frame, area: Rect, app: &App) {
         .gh_issues_flat_list
         .iter()
         .map(|item| match item {
-            FlatIssueItem::SectionHeader(label) => ListItem::new(Line::from(Span::styled(
-                label.clone(),
-                theme::ISSUE_SECTION,
-            ))),
+            FlatIssueItem::SectionHeader(label) => {
+                let style = if label.contains("Current Issue") {
+                    theme::CURRENT_ISSUE_HEADER
+                } else {
+                    theme::ISSUE_SECTION
+                };
+                ListItem::new(Line::from(Span::styled(label.clone(), style)))
+            }
             FlatIssueItem::Issue(issue) => {
+                let is_current = app.is_current_github_issue(issue.number);
+
                 let icon = issue.state_icon();
-                let icon_style = if issue.state == "OPEN" {
+                let icon_style = if is_current {
+                    theme::CURRENT_ISSUE
+                } else if issue.state == "OPEN" {
                     theme::ISSUE_OPEN
                 } else {
                     theme::ISSUE_CLOSED
+                };
+
+                let text_style = if is_current {
+                    theme::CURRENT_ISSUE
+                } else {
+                    theme::LIST_NORMAL
                 };
 
                 let mut spans = vec![
                     Span::styled(format!("{} ", icon), icon_style),
                     Span::styled(
                         format!("#{} ", issue.number),
-                        theme::LIST_NORMAL.add_modifier(Modifier::BOLD),
+                        text_style.add_modifier(Modifier::BOLD),
                     ),
-                    Span::styled(&issue.title, theme::LIST_NORMAL),
+                    Span::styled(&issue.title, text_style),
                 ];
 
                 if !issue.labels.is_empty() {
@@ -74,7 +88,11 @@ fn draw_issue_list(f: &mut Frame, area: Rect, app: &App) {
                         issue.labels.iter().map(|l| l.name.as_str()).collect();
                     spans.push(Span::styled(
                         format!("  [{}]", label_text.join(",")),
-                        theme::ISSUE_LABEL,
+                        if is_current {
+                            theme::CURRENT_ISSUE
+                        } else {
+                            theme::ISSUE_LABEL
+                        },
                     ));
                 }
 
