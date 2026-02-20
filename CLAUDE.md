@@ -8,7 +8,7 @@ All builds and tests must be run inside the Docker container. The container cros
 
 ```bash
 # Full release build — copies assoc.exe to target/x86_64-pc-windows-gnu/release/ locally
-./build.sh
+./build.ps1
 
 # Or manually: build image then export binary via BuildKit
 docker build -t assoc-build --target builder .
@@ -49,7 +49,7 @@ Requires the `stable-x86_64-pc-windows-gnu` toolchain with MinGW via MSYS2. MSVC
 Always run a full release build when finished implementing a plan or any code changes:
 
 ```bash
-./build.sh
+./build.ps1
 ```
 
 This ensures the binary is up to date and catches any issues not caught by `cargo check`.

@@ -25,7 +25,23 @@ Run this one-liner in PowerShell to download and install the latest release:
 irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1 | iex
 ```
 
-This downloads `assoc.exe` from the latest GitHub release and installs it to `%LOCALAPPDATA%\Programs\assoc`, adding it to your user PATH automatically.
+This downloads `assoc.exe` from the latest GitHub release and installs it to `%LOCALAPPDATA%\bin`, adding it to your user PATH automatically.
+
+### Update
+
+Re-run the install command to update to the latest release:
+
+```powershell
+irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1 | iex
+```
+
+### Uninstall
+
+Remove The Associate and clean up the PATH entry:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1))) -Uninstall
+```
 
 ### Build from source
 

@@ -654,7 +654,19 @@
 
       <div class="code-block">irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1 | iex</div>
 
-      <p>This downloads <code>assoc.exe</code> from the latest GitHub release and installs it to <code>%LOCALAPPDATA%\Programs\assoc</code>, adding it to your user PATH automatically.</p>
+      <p>This downloads <code>assoc.exe</code> from the latest GitHub release and installs it to <code>%LOCALAPPDATA%\bin</code>, adding it to your user PATH automatically.</p>
+
+      <h3>Update</h3>
+
+      <p>Re-run the install command to update to the latest release:</p>
+
+      <div class="code-block">irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1 | iex</div>
+
+      <h3>Uninstall</h3>
+
+      <p>Remove The Associate and clean up the PATH entry:</p>
+
+      <div class="code-block">& ([scriptblock]::Create((irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1))) -Uninstall</div>
 
       <h3>Build from source</h3>
 
