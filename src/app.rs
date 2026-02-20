@@ -263,6 +263,10 @@ pub struct App {
     pub process_rx: Option<mpsc::Receiver<ProcessOutput>>,
     pub next_process_id: usize,
 
+    // Prompt picker (custom prompts selection)
+    pub show_prompt_picker: bool,
+    pub prompt_picker_index: usize,
+
     // Prompt modal
     pub show_prompt_modal: bool,
     pub prompt_editor: Option<tui_textarea::TextArea<'static>>,
@@ -455,6 +459,9 @@ impl App {
             process_tx: None,
             process_rx: None,
             next_process_id: 1,
+
+            show_prompt_picker: false,
+            prompt_picker_index: 0,
 
             show_prompt_modal: false,
             prompt_editor: None,
@@ -2642,14 +2649,9 @@ impl App {
 
     // --- Prompt modal helpers ---
 
-    /// Open the prompt modal for the currently selected ticket (any issue management tab).
-    pub fn open_prompt_modal_for_current(&mut self) {
-        if !self.has_claude {
-            self.last_error = Some("claude CLI not found on PATH".to_string());
-            return;
-        }
-
-        let ticket = match self.active_tab {
+    /// Resolve the ticket for the currently selected item on any issue management tab.
+    fn resolve_current_ticket(&self) -> Option<TicketInfo> {
+        match self.active_tab {
             ActiveTab::GitHubPRs => self
                 .gh_selected_pr()
                 .map(prompt_builder::ticket_from_github_pr),
@@ -2663,19 +2665,77 @@ impl App {
                 .jira_selected_issue()
                 .map(prompt_builder::ticket_from_jira),
             _ => None,
-        };
+        }
+    }
+
+    /// Open the prompt modal for the currently selected ticket (any issue management tab).
+    /// If custom prompts are configured, shows the picker first.
+    pub fn open_prompt_modal_for_current(&mut self) {
+        if !self.has_claude {
+            self.last_error = Some("claude CLI not found on PATH".to_string());
+            return;
+        }
+
+        let ticket = self.resolve_current_ticket();
 
         if let Some(ticket) = ticket {
-            let prompt = prompt_builder::build_default_prompt(&ticket);
-            let mut editor = tui_textarea::TextArea::default();
-            editor.insert_str(&prompt);
-            editor.move_cursor(tui_textarea::CursorMove::Top);
-            editor.move_cursor(tui_textarea::CursorMove::Head);
-
-            self.prompt_editor = Some(editor);
-            self.prompt_ticket_info = Some(ticket);
-            self.show_prompt_modal = true;
+            // If custom prompts are configured, show the picker first
+            if !self.project_config.prompts.is_empty() {
+                self.prompt_ticket_info = Some(ticket);
+                self.prompt_picker_index = 0;
+                self.show_prompt_picker = true;
+            } else {
+                // No custom prompts — go straight to the editor with the default prompt
+                let prompt = prompt_builder::build_default_prompt(&ticket);
+                self.open_prompt_editor_with(ticket, &prompt);
+            }
         }
+    }
+
+    /// Open the prompt editor modal with the given ticket and pre-filled prompt text.
+    fn open_prompt_editor_with(&mut self, ticket: TicketInfo, prompt_text: &str) {
+        let mut editor = tui_textarea::TextArea::default();
+        editor.insert_str(prompt_text);
+        editor.move_cursor(tui_textarea::CursorMove::Top);
+        editor.move_cursor(tui_textarea::CursorMove::Head);
+
+        self.prompt_editor = Some(editor);
+        self.prompt_ticket_info = Some(ticket);
+        self.show_prompt_modal = true;
+    }
+
+    /// Confirm the current prompt picker selection and open the prompt modal.
+    pub fn confirm_prompt_picker(&mut self) {
+        let ticket = match self.prompt_ticket_info.take() {
+            Some(t) => t,
+            None => return,
+        };
+
+        self.show_prompt_picker = false;
+
+        // Index 0 = "Default (from ticket)", rest map to custom prompts
+        let prompt_text = if self.prompt_picker_index == 0 {
+            prompt_builder::build_default_prompt(&ticket)
+        } else {
+            let custom_idx = self.prompt_picker_index - 1;
+            match self.project_config.prompts.get(custom_idx) {
+                Some(cp) => cp.prompt.clone(),
+                None => prompt_builder::build_default_prompt(&ticket),
+            }
+        };
+
+        self.open_prompt_editor_with(ticket, &prompt_text);
+    }
+
+    /// Cancel and close the prompt picker.
+    pub fn cancel_prompt_picker(&mut self) {
+        self.show_prompt_picker = false;
+        self.prompt_ticket_info = None;
+    }
+
+    /// Total number of items in the prompt picker (default + custom prompts).
+    pub fn prompt_picker_len(&self) -> usize {
+        1 + self.project_config.prompts.len()
     }
 
     /// Confirm and launch the process from the prompt modal.

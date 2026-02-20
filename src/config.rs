@@ -36,6 +36,14 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub tabs: TabsConfig,
     pub pane: Option<PaneConfig>,
+    #[serde(default)]
+    pub prompts: Vec<CustomPrompt>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CustomPrompt {
+    pub title: String,
+    pub prompt: String,
 }
 
 /// Per-tab enable/disable configuration.
