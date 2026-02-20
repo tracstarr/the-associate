@@ -10,6 +10,7 @@ use crate::data::{
     process_runner::{self, ProcessOutput},
     prompt_builder, sessions, subagents, tasks, teams, todos, transcripts,
 };
+use crate::event::AppEvent;
 use crate::event::FileChange;
 use crate::model::agent_status::{self, AgentStatus};
 use crate::model::filebrowser::{FileBrowserEntry, FileContent};
@@ -267,6 +268,13 @@ pub struct App {
     pub prompt_editor: Option<tui_textarea::TextArea<'static>>,
     pub prompt_ticket_info: Option<TicketInfo>,
 
+    // Pane send
+    pub send_mode: bool,
+    pub send_input: String,
+    pub send_pending: bool,
+    pub send_status: Option<(String, Instant)>,
+    pub event_tx: Option<mpsc::Sender<AppEvent>>,
+
     // Status
     pub last_update: Instant,
     pub last_error: Option<String>,
@@ -376,6 +384,12 @@ impl App {
             fb_pane: FileBrowserPane::Tree,
             fb_editing: false,
             fb_editor: None,
+
+            send_mode: false,
+            send_input: String::new(),
+            send_pending: false,
+            send_status: None,
+            event_tx: None,
 
             has_gh,
             gh_repo,
@@ -3057,5 +3071,53 @@ fn truncate_str(s: &str, max: usize) -> String {
     } else {
         let truncated: String = s.chars().take(max.saturating_sub(3)).collect();
         format!("{}...", truncated)
+    }
+}
+
+impl App {
+    // --- Pane send helpers ---
+
+    pub fn start_send_mode(&mut self) {
+        self.send_mode = true;
+        self.send_input.clear();
+    }
+
+    pub fn cancel_send_mode(&mut self) {
+        self.send_mode = false;
+        self.send_input.clear();
+    }
+
+    pub fn execute_send(&mut self) {
+        let text = self.send_input.trim().to_string();
+        if text.is_empty() {
+            self.cancel_send_mode();
+            return;
+        }
+        self.send_mode = false;
+        self.send_pending = true;
+        self.send_input.clear();
+
+        if let Some(ref tx) = self.event_tx {
+            let direction = self.project_config.send_direction();
+            crate::pane_send::send_to_claude_pane(text, direction, tx.clone());
+        }
+    }
+
+    pub fn handle_send_complete(&mut self, error: Option<String>) {
+        self.send_pending = false;
+        if let Some(e) = error {
+            self.last_error = Some(format!("Send: {}", e));
+        } else {
+            self.send_status = Some(("Sent!".to_string(), Instant::now()));
+        }
+    }
+
+    /// Clear stale send status (after 3 seconds).
+    pub fn clear_stale_send_status(&mut self) {
+        if let Some((_, ts)) = &self.send_status {
+            if ts.elapsed() > std::time::Duration::from_secs(3) {
+                self.send_status = None;
+            }
+        }
     }
 }

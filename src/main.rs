@@ -3,6 +3,7 @@ mod config;
 mod data;
 mod event;
 mod model;
+mod pane_send;
 mod ui;
 mod watcher;
 
@@ -117,6 +118,7 @@ TUI KEYBINDINGS:
   r                  Refresh data (PRs / Issues / Jira / Linear)
   t                  Show transitions (Jira)
   /                  Search issues (Jira)
+  i                  Send input to Claude pane
   ?                  Toggle help overlay
   q / Ctrl+C         Quit
 
@@ -261,6 +263,7 @@ fn run_app(
 
     // Setup file watcher (skips directories for disabled tabs)
     let (tx, rx) = mpsc::channel::<AppEvent>();
+    app.event_tx = Some(tx.clone());
     let _debouncer = watcher::start_watcher(
         app.claude_home.clone(),
         app.encoded_project.clone(),
@@ -289,10 +292,11 @@ fn run_app(
             }
         }
 
-        // Check for file watcher events
+        // Check for file watcher and pane send events
         while let Ok(evt) = rx.try_recv() {
-            if let AppEvent::FileChanged(change) = evt {
-                app.handle_file_change(change);
+            match evt {
+                AppEvent::FileChanged(change) => app.handle_file_change(change),
+                AppEvent::PaneSendComplete(err) => app.handle_send_complete(err),
             }
         }
 
@@ -336,6 +340,9 @@ fn run_app(
 
             // Poll spawned process output
             app.poll_process_output();
+
+            // Clear stale send status
+            app.clear_stale_send_status();
         }
 
         if app.should_quit {
@@ -386,6 +393,12 @@ fn handle_key(app: &mut App, key: KeyEvent) {
     // Prompt modal — pass keys to prompt editor
     if app.show_prompt_modal {
         handle_prompt_modal_key(app, key);
+        return;
+    }
+
+    // Pane send input mode
+    if app.send_mode {
+        handle_send_key(app, key);
         return;
     }
 
@@ -590,6 +603,31 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             _ => {}
         },
 
+        // Send to Claude pane
+        KeyCode::Char('i') => {
+            if !app.send_pending {
+                app.start_send_mode();
+            }
+        }
+
+        _ => {}
+    }
+}
+
+fn handle_send_key(app: &mut App, key: KeyEvent) {
+    match key.code {
+        KeyCode::Esc => {
+            app.cancel_send_mode();
+        }
+        KeyCode::Enter => {
+            app.execute_send();
+        }
+        KeyCode::Backspace => {
+            app.send_input.pop();
+        }
+        KeyCode::Char(c) => {
+            app.send_input.push(c);
+        }
         _ => {}
     }
 }
