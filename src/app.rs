@@ -252,15 +252,11 @@ impl App {
             .map(String::from)
             .or_else(|| gh_repo.clone());
 
-        // Check if issues should be shown: gh available, repo known, config enabled,
-        // and the repo actually has issues enabled on GitHub.
+        // Show Issues tab if gh is available, repo is known, and config doesn't disable it.
+        // We don't pre-check hasIssuesEnabled — if issues can't be fetched, the tab shows an error.
         let gh_issues_enabled = has_gh
             && gh_issues_repo.is_some()
-            && project_config.github_issues_enabled()
-            && gh_issues_repo
-                .as_deref()
-                .map(github::repo_has_issues)
-                .unwrap_or(false);
+            && project_config.github_issues_enabled();
 
         let tail_lines = project_config.tail_lines();
 
