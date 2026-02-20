@@ -2157,6 +2157,7 @@ impl App {
         let username = self.project_config.linear_username().map(|s| s.to_string());
         let team = self.project_config.linear_team().map(|s| s.to_string());
 
+        self.linear_last_poll = Instant::now();
         match linear::fetch_my_issues(&api_key, username.as_deref(), team.as_deref()) {
             Ok(issues) => {
                 self.linear_flat_list = linear::categorize_issues(&issues, username.as_deref());
@@ -2165,7 +2166,6 @@ impl App {
                     self.linear_index = 0;
                     self.linear_skip_to_issue_entry();
                 }
-                self.linear_last_poll = Instant::now();
             }
             Err(e) => {
                 self.last_error = Some(format!("Linear: {}", e));
