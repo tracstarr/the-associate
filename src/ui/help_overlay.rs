@@ -7,8 +7,8 @@ use super::theme;
 
 pub fn draw_help(f: &mut Frame, area: Rect) {
     // Center a box
-    let width = 58u16.min(area.width.saturating_sub(4));
-    let height = 28u16.min(area.height.saturating_sub(4));
+    let width = 60u16.min(area.width.saturating_sub(4));
+    let height = 34u16.min(area.height.saturating_sub(4));
 
     let vert = Layout::default()
         .direction(Direction::Vertical)
@@ -43,11 +43,14 @@ pub fn draw_help(f: &mut Frame, area: Rect) {
         ("f", "Toggle follow mode (Sessions)"),
         ("s", "Cycle subagent transcripts (Sessions)"),
         ("b", "Toggle file browser (Git tab)"),
-        ("e", "Edit file (file browser)"),
-        ("Ctrl+S", "Save edit (file browser)"),
+        ("e", "Edit file (browser) / issue (Issues)"),
+        ("Ctrl+S", "Save edit"),
         ("Backspace", "Collapse / go to parent (browser)"),
-        ("o", "Open in browser (PRs / Jira)"),
-        ("r", "Refresh (PRs / Jira)"),
+        ("n", "New issue (Issues tab)"),
+        ("c", "Comment on issue (Issues tab)"),
+        ("x", "Close/reopen issue (Issues tab)"),
+        ("o", "Open in browser (PRs / Issues / Jira)"),
+        ("r", "Refresh (PRs / Issues / Jira)"),
         ("t", "Show transitions (Jira)"),
         ("/", "Search (Jira)"),
         ("? / Ctrl-H", "Toggle this help"),

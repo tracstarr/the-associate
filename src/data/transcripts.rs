@@ -85,7 +85,6 @@ impl TranscriptReader {
                     had_new = true;
                     self.items.extend(parsed);
                 }
-
             }
         }
 

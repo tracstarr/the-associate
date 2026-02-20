@@ -4,8 +4,8 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 use super::{
-    git_view, github_view, help_overlay, jira_view, plans_view, sessions_view, tabs, teams_view,
-    theme, todos_view,
+    git_view, github_view, help_overlay, issues_view, jira_view, plans_view, sessions_view, tabs,
+    teams_view, theme, todos_view,
 };
 use crate::app::{ActiveTab, App, GitMode, SessionsPane};
 
@@ -42,6 +42,7 @@ fn draw_content(f: &mut Frame, area: Rect, app: &App) {
         ActiveTab::Git => git_view::draw_git(f, area, app),
         ActiveTab::Plans => plans_view::draw_plans(f, area, app),
         ActiveTab::GitHubPRs => github_view::draw_github(f, area, app),
+        ActiveTab::GitHubIssues => issues_view::draw_issues(f, area, app),
         ActiveTab::Jira => jira_view::draw_jira(f, area, app),
     }
 }
@@ -68,6 +69,15 @@ fn hint_text(app: &App) -> Vec<(&'static str, &'static str)> {
         }
         ActiveTab::Plans => vec![("j/k", "nav"), ("h/l", "panes")],
         ActiveTab::GitHubPRs => vec![("j/k", "nav"), ("o", "open"), ("r", "refresh")],
+        ActiveTab::GitHubIssues => vec![
+            ("j/k", "nav"),
+            ("n", "new"),
+            ("e", "edit"),
+            ("c", "comment"),
+            ("x", "close/open"),
+            ("o", "browser"),
+            ("r", "refresh"),
+        ],
         ActiveTab::Jira => vec![
             ("j/k", "nav"),
             ("o", "open"),
@@ -116,6 +126,17 @@ fn draw_status_bar(f: &mut Frame, area: Rect, app: &App) {
                     .add_modifier(ratatui::style::Modifier::BOLD),
             ));
         }
+    }
+
+    // Issues edit mode indicator
+    if app.active_tab == ActiveTab::GitHubIssues && app.gh_issues_editing {
+        left_spans.push(Span::styled(
+            " EDIT ",
+            ratatui::style::Style::new()
+                .fg(ratatui::style::Color::Black)
+                .bg(ratatui::style::Color::Yellow)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        ));
     }
 
     // Jira search mode indicator
