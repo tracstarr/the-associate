@@ -1,9 +1,7 @@
 name: Auto Version Bump
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch: # disabled: was push on main
 
 permissions:
   contents: write
