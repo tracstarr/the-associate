@@ -581,6 +581,7 @@
         <a href="#config-jira" class="sidebar-link sub">Jira</a>
         <a href="#config-linear" class="sidebar-link sub">Linear</a>
         <a href="#config-display" class="sidebar-link sub">Display</a>
+        <a href="#config-tabs" class="sidebar-link sub">Tabs</a>
       </div>
       <div class="sidebar-section">
         <div class="sidebar-heading">Reference</div>
@@ -781,7 +782,18 @@ team = "BIT"                 <span class="comment"># Optional: filter to a speci
 
 [display]
 tick_rate = 250              <span class="comment"># UI refresh interval in ms (default: 250)</span>
-tail_lines = 200             <span class="comment"># Lines to load from end of transcript (default: 200)</span></div>
+tail_lines = 200             <span class="comment"># Lines to load from end of transcript (default: 200)</span>
+
+[tabs]
+sessions = true              <span class="comment"># Set to false to disable the Sessions tab entirely</span>
+teams = true
+todos = true
+git = true
+plans = true
+github_prs = true
+github_issues = true
+jira = true
+linear = true</div>
 
       <h3 id="config-github">GitHub settings</h3>
       <table class="config-table">
@@ -873,6 +885,25 @@ tail_lines = 200             <span class="comment"># Lines to load from end of t
             <td><code>200</code></td>
             <td>Number of lines loaded from the end of JSONL transcript files on initial read. Higher values load more history but use more memory.</td>
           </tr>
+        </tbody>
+      </table>
+
+      <h3 id="config-tabs">Tabs settings</h3>
+      <p>Set any tab to <code>false</code> to disable it entirely. Disabled tabs are hidden from the tab bar, their data is never loaded or polled, and their CLI tools are not detected at startup.</p>
+      <table class="config-table">
+        <thead>
+          <tr><th>Key</th><th>Type</th><th>Default</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>tabs.sessions</code></td><td>Boolean</td><td><code>true</code></td><td>Show the Sessions tab.</td></tr>
+          <tr><td><code>tabs.teams</code></td><td>Boolean</td><td><code>true</code></td><td>Show the Teams tab.</td></tr>
+          <tr><td><code>tabs.todos</code></td><td>Boolean</td><td><code>true</code></td><td>Show the Todos tab.</td></tr>
+          <tr><td><code>tabs.git</code></td><td>Boolean</td><td><code>true</code></td><td>Show the Git tab.</td></tr>
+          <tr><td><code>tabs.plans</code></td><td>Boolean</td><td><code>true</code></td><td>Show the Plans tab.</td></tr>
+          <tr><td><code>tabs.github_prs</code></td><td>Boolean</td><td><code>true</code></td><td>Show the PRs tab. When <code>false</code>, <code>gh</code> is not detected unless <code>tabs.github_issues</code> is also enabled.</td></tr>
+          <tr><td><code>tabs.github_issues</code></td><td>Boolean</td><td><code>true</code></td><td>Show the Issues tab. When <code>false</code>, <code>gh</code> is not detected unless <code>tabs.github_prs</code> is also enabled.</td></tr>
+          <tr><td><code>tabs.jira</code></td><td>Boolean</td><td><code>true</code></td><td>Show the Jira tab. When <code>false</code>, <code>acli</code> is not detected at startup.</td></tr>
+          <tr><td><code>tabs.linear</code></td><td>Boolean</td><td><code>true</code></td><td>Show the Linear tab. When <code>false</code>, the Linear API key is ignored and no polling occurs.</td></tr>
         </tbody>
       </table>
 
