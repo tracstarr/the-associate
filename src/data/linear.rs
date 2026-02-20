@@ -128,8 +128,11 @@ fn parse_response(data: &[u8]) -> Result<Vec<LinearIssue>> {
 
     let issues: Vec<LinearIssue> = nodes
         .iter()
-        .filter_map(|node| serde_json::from_value(node.clone()).ok())
-        .collect();
+        .map(|node| {
+            serde_json::from_value(node.clone())
+                .map_err(|e| anyhow::anyhow!("failed to parse Linear issue: {}", e))
+        })
+        .collect::<Result<Vec<_>>>()?;
 
     Ok(issues)
 }
