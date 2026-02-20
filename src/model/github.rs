@@ -111,6 +111,7 @@ pub struct IssueAssignee {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct IssueComment {
     pub author: IssueAuthor,
     pub body: String,
