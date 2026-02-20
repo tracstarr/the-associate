@@ -1,0 +1,501 @@
+mod app;
+mod config;
+mod data;
+mod event;
+mod model;
+mod ui;
+mod watcher;
+
+use std::io;
+use std::path::PathBuf;
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
+
+use anyhow::Result;
+use clap::Parser;
+use crossterm::event::{self as ct_event, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::execute;
+use crossterm::terminal::{
+    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+};
+use ratatui::backend::CrosstermBackend;
+use ratatui::Terminal;
+
+use crate::app::App;
+use crate::event::AppEvent;
+
+#[derive(Parser)]
+#[command(
+    name = "assoc",
+    version,
+    about = "The Associate - Claude Code Session Dashboard",
+    override_help = HELP_TEXT,
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+
+    /// Project directory to monitor (defaults to current directory)
+    #[arg(long, global = true)]
+    cwd: Option<PathBuf>,
+}
+
+#[derive(clap::Subcommand)]
+enum Command {
+    /// Launch Windows Terminal with Claude Code + Associate side by side
+    Launch {
+        /// Session ID to resume
+        #[arg(long)]
+        resume: Option<String>,
+
+        /// Claude pane width ratio (0.0-1.0)
+        #[arg(long, default_value_t = 0.5)]
+        claude_ratio: f64,
+
+        /// Terminal columns
+        #[arg(long, default_value_t = 200)]
+        cols: u32,
+
+        /// Terminal rows
+        #[arg(long, default_value_t = 50)]
+        rows: u32,
+
+        /// Extra arguments passed to claude (e.g. --dangerously-skip-permissions)
+        #[arg(last = true)]
+        claude_args: Vec<String>,
+    },
+}
+
+const HELP_TEXT: &str = "\
+The Associate - Claude Code Session Dashboard
+
+USAGE:
+  assoc [OPTIONS]                   Start the TUI dashboard
+  assoc launch [OPTIONS] [-- ...]   Open Windows Terminal with Claude + dashboard
+
+MODES:
+  (default)   Interactive TUI that monitors Claude Code sessions, teams,
+              todos, git status, and plans for the given project directory.
+
+  launch      Opens Windows Terminal with two panes side by side:
+              left = Claude Code, right = Associate dashboard.
+              Requires Windows Terminal (wt.exe) to be installed.
+
+GLOBAL OPTIONS:
+  --cwd <DIR>       Project directory to monitor [default: current dir]
+  -h, --help        Print this help
+  -V, --version     Print version
+
+LAUNCH OPTIONS:
+  --resume <ID>             Resume a Claude Code session by ID
+  --claude-ratio <FLOAT>    Claude pane width ratio, 0.0-1.0 [default: 0.5]
+  --cols <N>                Terminal columns [default: 200]
+  --rows <N>                Terminal rows [default: 50]
+  -- <ARGS>...              Extra arguments passed to claude
+                            (e.g. -- --dangerously-skip-permissions)
+
+TUI KEYBINDINGS:
+  1-9                Jump to tab by number
+  Tab / Shift+Tab    Cycle tabs
+  j/k  Up/Down       Navigate list / scroll content
+  h/l  Left/Right    Switch panes
+  Enter              Select item / open content pane
+  g / G              Jump to top / bottom
+  f                  Toggle follow mode (Sessions tab)
+  s                  Cycle subagent transcripts (Sessions tab)
+  b                  Toggle file browser (Git tab)
+  e                  Edit file (file browser, Content pane)
+  Ctrl+S / Esc       Save / cancel edit (file browser)
+  o                  Open in browser (PRs / Jira)
+  r                  Refresh data (PRs / Jira)
+  t                  Show transitions (Jira)
+  /                  Search issues (Jira)
+  ?                  Toggle help overlay
+  q / Ctrl+C         Quit
+
+EXAMPLES:
+  assoc --cwd C:\\dev\\myproject
+  assoc launch --cwd C:\\dev\\myproject -- --dangerously-skip-permissions
+  assoc launch --resume abc123 --claude-ratio 0.6";
+
+fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    let project_cwd = resolve_cwd(cli.cwd)?;
+
+    match cli.command {
+        Some(Command::Launch {
+            resume,
+            claude_ratio,
+            cols,
+            rows,
+            claude_args,
+        }) => launch_wt(&project_cwd, resume, claude_ratio, cols, rows, &claude_args),
+        None => run_tui(project_cwd),
+    }
+}
+
+fn resolve_cwd(cwd: Option<PathBuf>) -> Result<PathBuf> {
+    match cwd {
+        Some(p) => {
+            let canonical = std::fs::canonicalize(p)?;
+            // On Windows, canonicalize returns \\?\C:\... extended-length paths.
+            // Strip prefix so path encoding matches Claude Code's convention.
+            let s = canonical.to_string_lossy();
+            if s.starts_with(r"\\?\") {
+                Ok(PathBuf::from(&s[4..]))
+            } else {
+                Ok(canonical)
+            }
+        }
+        None => Ok(std::env::current_dir()?),
+    }
+}
+
+fn run_tui(project_cwd: PathBuf) -> Result<()> {
+    // Setup terminal
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    // Run app
+    let result = run_app(&mut terminal, project_cwd);
+
+    // Restore terminal
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    terminal.show_cursor()?;
+
+    if let Err(ref e) = result {
+        eprintln!("Error: {}", e);
+    }
+    result
+}
+
+fn launch_wt(
+    project_cwd: &PathBuf,
+    resume: Option<String>,
+    claude_ratio: f64,
+    cols: u32,
+    rows: u32,
+    claude_args: &[String],
+) -> Result<()> {
+    // Find our own exe to spawn in the assoc pane
+    let self_exe = std::env::current_exe()?;
+    let dir = project_cwd.to_string_lossy();
+
+    // Build claude arguments
+    let mut claude_cmd_args: Vec<String> = Vec::new();
+    if let Some(ref session_id) = resume {
+        claude_cmd_args.push("--resume".to_string());
+        claude_cmd_args.push(session_id.clone());
+    }
+    // Append any extra args passed after --
+    claude_cmd_args.extend_from_slice(claude_args);
+
+    let claude_full = if claude_cmd_args.is_empty() {
+        "claude".to_string()
+    } else {
+        format!("claude {}", claude_cmd_args.join(" "))
+    };
+
+    // wt.exe new-tab: assoc (right/initial pane)
+    // split-pane: claude (left pane, takes claude_ratio of width)
+    // focus-pane: focus claude pane
+    let status = std::process::Command::new("wt.exe")
+        .arg("--size")
+        .arg(format!("{},{}", cols, rows))
+        .arg("new-tab")
+        .arg("--title")
+        .arg("The Associate")
+        .arg("-d")
+        .arg(&*dir)
+        .arg("--")
+        .arg(&self_exe)
+        .arg("--cwd")
+        .arg(&*dir)
+        .arg(";")
+        .arg("split-pane")
+        .arg("-V")
+        .arg("-s")
+        .arg(format!("{}", claude_ratio))
+        .arg("--title")
+        .arg("Claude Code")
+        .arg("-d")
+        .arg(&*dir)
+        .arg("--")
+        .args(claude_full.split_whitespace())
+        .arg(";")
+        .arg("focus-pane")
+        .arg("-t")
+        .arg("1")
+        .status();
+
+    match status {
+        Ok(s) if s.success() => Ok(()),
+        Ok(s) => anyhow::bail!("wt.exe exited with {}", s),
+        Err(e) => anyhow::bail!(
+            "Failed to run wt.exe: {}. Is Windows Terminal installed?",
+            e
+        ),
+    }
+}
+
+fn run_app(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    project_cwd: PathBuf,
+) -> Result<()> {
+    let mut app = App::new(project_cwd);
+
+    // Initial data load
+    app.load_all();
+
+    // Setup file watcher
+    let (tx, rx) = mpsc::channel::<AppEvent>();
+    let _debouncer = watcher::start_watcher(
+        app.claude_home.clone(),
+        app.encoded_project.clone(),
+        app.project_cwd.clone(),
+        tx,
+    )?;
+
+    let tick_rate = Duration::from_millis(app.project_config.tick_rate());
+    let poll_interval = Duration::from_secs(60);
+    let mut last_tick = Instant::now();
+
+    loop {
+        // Draw
+        terminal.draw(|f| ui::draw(f, &app))?;
+
+        // Handle events
+        let timeout = tick_rate.saturating_sub(last_tick.elapsed());
+
+        // Check for crossterm events
+        if ct_event::poll(timeout)? {
+            if let Event::Key(key) = ct_event::read()? {
+                if key.kind == KeyEventKind::Press {
+                    handle_key(&mut app, key);
+                }
+            }
+        }
+
+        // Check for file watcher events
+        while let Ok(evt) = rx.try_recv() {
+            if let AppEvent::FileChanged(change) = evt {
+                app.handle_file_change(change);
+            }
+        }
+
+        // Tick
+        if last_tick.elapsed() >= tick_rate {
+            last_tick = Instant::now();
+
+            // Poll GitHub PRs every 60s
+            if app.has_gh && app.gh_repo.is_some() && app.gh_last_poll.elapsed() >= poll_interval {
+                app.load_github_prs();
+            }
+
+            // Poll Jira every 60s
+            if app.has_jira && app.jira_last_poll.elapsed() >= poll_interval {
+                app.load_jira_issues();
+            }
+        }
+
+        if app.should_quit {
+            return Ok(());
+        }
+    }
+}
+
+fn handle_key(app: &mut App, key: KeyEvent) {
+    // Global keybindings (always active)
+    match key.code {
+        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.should_quit = true;
+            return;
+        }
+        KeyCode::Char('?') if !app.fb_editing && !app.jira_search_mode => {
+            app.show_help = !app.show_help;
+            return;
+        }
+        KeyCode::Char('h') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.show_help = !app.show_help;
+            return;
+        }
+        KeyCode::Esc if app.show_help => {
+            app.show_help = false;
+            return;
+        }
+        _ => {}
+    }
+
+    // Don't process other keys when help is showing
+    if app.show_help {
+        return;
+    }
+
+    // File browser edit mode — pass keys to TextArea
+    if app.fb_editing {
+        handle_fb_edit_key(app, key);
+        return;
+    }
+
+    // Jira transition popup — number keys select transition
+    if app.jira_show_transitions {
+        match key.code {
+            KeyCode::Esc => app.jira_show_transitions = false,
+            KeyCode::Char(c) if c.is_ascii_digit() && c != '0' => {
+                let idx = (c as usize) - ('1' as usize);
+                app.jira_do_transition(idx);
+            }
+            _ => {}
+        }
+        return;
+    }
+
+    // Jira search mode — text input
+    if app.jira_search_mode {
+        match key.code {
+            KeyCode::Esc => {
+                app.jira_search_mode = false;
+                app.jira_search_input.clear();
+                app.load_jira_issues(); // reset to default view
+            }
+            KeyCode::Enter => {
+                app.jira_search();
+            }
+            KeyCode::Backspace => {
+                app.jira_search_input.pop();
+            }
+            KeyCode::Char(c) => {
+                app.jira_search_input.push(c);
+            }
+            _ => {}
+        }
+        return;
+    }
+
+    // Quit
+    if key.code == KeyCode::Char('q') {
+        app.should_quit = true;
+        return;
+    }
+
+    match key.code {
+        // Tab switching
+        KeyCode::Tab => {
+            if key.modifiers.contains(KeyModifiers::SHIFT) {
+                app.prev_tab();
+            } else {
+                app.next_tab();
+            }
+        }
+
+        // Dynamic number keys
+        KeyCode::Char(c) if c.is_ascii_digit() && c != '0' => {
+            let idx = (c as usize) - ('1' as usize);
+            let tabs = app.visible_tabs();
+            if idx < tabs.len() {
+                app.switch_to_tab(tabs[idx].clone());
+            }
+        }
+
+        // Navigation
+        KeyCode::Char('j') | KeyCode::Down => app.navigate_down(),
+        KeyCode::Char('k') | KeyCode::Up => app.navigate_up(),
+        KeyCode::Char('h') | KeyCode::Left => app.navigate_left(),
+        KeyCode::Char('l') | KeyCode::Right => app.navigate_right(),
+        KeyCode::Enter => app.select_item(),
+
+        // Jump
+        KeyCode::Char('g') => app.jump_top(),
+        KeyCode::Char('G') => app.jump_bottom(),
+
+        // Follow mode (Sessions tab)
+        KeyCode::Char('f') => {
+            if app.active_tab == app::ActiveTab::Sessions {
+                app.toggle_follow();
+            }
+        }
+
+        // Subagent transcript cycling (Sessions tab)
+        KeyCode::Char('s') => {
+            if app.active_tab == app::ActiveTab::Sessions
+                && app.sessions_pane == app::SessionsPane::Transcript
+            {
+                app.cycle_subagent();
+            }
+        }
+
+        // File browser toggle (Git tab)
+        KeyCode::Char('b') => {
+            if app.active_tab == app::ActiveTab::Git {
+                app.toggle_git_mode();
+            }
+        }
+
+        // Backspace for file browser navigation
+        KeyCode::Backspace => {
+            if app.active_tab == app::ActiveTab::Git && app.git_mode == app::GitMode::Browse {
+                app.fb_backspace();
+            }
+        }
+
+        // Edit file (file browser)
+        KeyCode::Char('e') => {
+            if app.active_tab == app::ActiveTab::Git && app.git_mode == app::GitMode::Browse {
+                app.fb_start_edit();
+            }
+        }
+
+        // Open in browser
+        KeyCode::Char('o') => match app.active_tab {
+            app::ActiveTab::GitHubPRs => app.gh_open_selected(),
+            app::ActiveTab::Jira => app.jira_open_selected(),
+            _ => {}
+        },
+
+        // Refresh
+        KeyCode::Char('r') => match app.active_tab {
+            app::ActiveTab::GitHubPRs => app.load_github_prs(),
+            app::ActiveTab::Jira => app.load_jira_issues(),
+            _ => {}
+        },
+
+        // Jira transitions
+        KeyCode::Char('t') => {
+            if app.active_tab == app::ActiveTab::Jira {
+                app.jira_load_transitions();
+            }
+        }
+
+        // Jira search
+        KeyCode::Char('/') => {
+            if app.active_tab == app::ActiveTab::Jira {
+                app.jira_search_mode = true;
+                app.jira_search_input.clear();
+            }
+        }
+
+        _ => {}
+    }
+}
+
+fn handle_fb_edit_key(app: &mut App, key: KeyEvent) {
+    match key.code {
+        KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.fb_save_edit();
+        }
+        KeyCode::Esc => {
+            app.fb_cancel_edit();
+        }
+        _ => {
+            // Pass key to TextArea
+            if let Some(ref mut editor) = app.fb_editor {
+                editor.input(key);
+            }
+        }
+    }
+}

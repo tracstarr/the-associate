@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Documentation — The Associate</title>
+  <meta name="description" content="Full user documentation for The Associate, a real-time TUI dashboard for Claude Code on Windows.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ============================================================
+       CSS Custom Properties (matching landing page)
+       ============================================================ */
+    :root {
+      --bg-darkest: #0B0B0F;
+      --bg-dark: #12121A;
+      --bg-mid: #1A1A24;
+      --bg-light: #222230;
+
+      --gold: #D4A843;
+      --gold-dark: #C9973F;
+      --gold-light: #E8C66A;
+      --gold-faint: rgba(212, 168, 67, 0.05);
+      --gold-border: rgba(212, 168, 67, 0.15);
+      --gold-glow: rgba(212, 168, 67, 0.3);
+
+      --red-deep: #8B0000;
+      --red-subtle: rgba(139, 0, 0, 0.3);
+
+      --text-warm: #F0E6D3;
+      --text-muted: #A09880;
+      --text-faint: #706850;
+
+      --font-heading: 'Playfair Display', Georgia, 'Times New Roman', serif;
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+
+      --sidebar-width: 260px;
+    }
+
+    /* ============================================================
+       Reset & Base
+       ============================================================ */
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      font-size: 16px;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background-color: var(--bg-darkest);
+      color: var(--text-warm);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    a {
+      color: var(--gold);
+      text-decoration: none;
+      transition: color 0.3s ease;
+    }
+
+    a:hover {
+      color: var(--gold-light);
+    }
+
+    /* ============================================================
+       Top Navigation Bar
+       ============================================================ */
+    .topnav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: var(--bg-darkest);
+      border-bottom: 1px solid var(--gold-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      height: 56px;
+    }
+
+    .topnav-brand {
+      font-family: var(--font-heading);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--gold);
+      letter-spacing: 1px;
+    }
+
+    .topnav-links {
+      display: flex;
+      gap: 28px;
+      align-items: center;
+    }
+
+    .topnav-links a {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .topnav-links a:hover {
+      color: var(--gold);
+    }
+
+    .topnav-links a.active {
+      color: var(--gold);
+    }
+
+    /* ============================================================
+       Layout: Sidebar + Main Content
+       ============================================================ */
+    .docs-layout {
+      display: flex;
+      margin-top: 56px;
+      min-height: calc(100vh - 56px);
+    }
+
+    /* ============================================================
+       Sidebar
+       ============================================================ */
+    .sidebar {
+      position: fixed;
+      top: 56px;
+      left: 0;
+      width: var(--sidebar-width);
+      height: calc(100vh - 56px);
+      overflow-y: auto;
+      background: var(--bg-dark);
+      border-right: 1px solid var(--gold-border);
+      padding: 32px 0;
+      z-index: 50;
+    }
+
+    .sidebar::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .sidebar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .sidebar::-webkit-scrollbar-thumb {
+      background: var(--gold-border);
+      border-radius: 2px;
+    }
+
+    .sidebar-section {
+      margin-bottom: 8px;
+    }
+
+    .sidebar-heading {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      padding: 8px 24px;
+    }
+
+    .sidebar-link {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      padding: 6px 24px 6px 28px;
+      border-left: 2px solid transparent;
+      transition: all 0.2s ease;
+    }
+
+    .sidebar-link:hover {
+      color: var(--text-warm);
+      background: var(--gold-faint);
+    }
+
+    .sidebar-link.active {
+      color: var(--gold);
+      border-left-color: var(--gold);
+      background: var(--gold-faint);
+    }
+
+    .sidebar-link.sub {
+      font-size: 0.8rem;
+      padding-left: 40px;
+      color: var(--text-faint);
+    }
+
+    .sidebar-link.sub:hover {
+      color: var(--text-muted);
+    }
+
+    .sidebar-link.sub.active {
+      color: var(--gold);
+    }
+
+    /* ============================================================
+       Main Content
+       ============================================================ */
+    .docs-main {
+      margin-left: var(--sidebar-width);
+      flex: 1;
+      max-width: 860px;
+      padding: 48px 56px 120px;
+    }
+
+    /* ============================================================
+       Typography
+       ============================================================ */
+    .docs-main h1 {
+      font-family: var(--font-heading);
+      font-size: 2.8rem;
+      font-weight: 900;
+      color: var(--text-warm);
+      line-height: 1.15;
+      margin-bottom: 16px;
+    }
+
+    .docs-main h1 em {
+      font-style: italic;
+      color: var(--gold);
+    }
+
+    .docs-subtitle {
+      font-size: 1.15rem;
+      color: var(--text-muted);
+      margin-bottom: 48px;
+      font-weight: 300;
+      line-height: 1.7;
+    }
+
+    .docs-main h2 {
+      font-family: var(--font-heading);
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--text-warm);
+      margin-top: 72px;
+      margin-bottom: 8px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--gold-border);
+    }
+
+    .docs-main h3 {
+      font-family: var(--font-heading);
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--text-warm);
+      margin-top: 40px;
+      margin-bottom: 12px;
+    }
+
+    .docs-main h4 {
+      font-family: var(--font-body);
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--gold);
+      margin-top: 28px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .docs-main p {
+      margin-bottom: 16px;
+      color: var(--text-muted);
+    }
+
+    .docs-main ul, .docs-main ol {
+      margin-bottom: 16px;
+      padding-left: 24px;
+    }
+
+    .docs-main li {
+      margin-bottom: 8px;
+      color: var(--text-muted);
+    }
+
+    .docs-main li strong {
+      color: var(--text-warm);
+    }
+
+    .docs-main strong {
+      color: var(--text-warm);
+      font-weight: 600;
+    }
+
+    /* Inline code */
+    .docs-main code {
+      font-family: var(--font-mono);
+      font-size: 0.85em;
+      color: var(--gold);
+      background: rgba(212, 168, 67, 0.08);
+      border: 1px solid rgba(212, 168, 67, 0.12);
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+
+    /* Code blocks */
+    .code-block {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: var(--text-warm);
+      background: var(--bg-mid);
+      border: 1px solid var(--gold-border);
+      border-left: 3px solid var(--gold-dark);
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    .code-block .comment {
+      color: var(--text-faint);
+    }
+
+    /* ============================================================
+       Keybindings Table
+       ============================================================ */
+    .key-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 24px;
+    }
+
+    .key-table th {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--gold);
+      text-align: left;
+      padding: 10px 16px;
+      border-bottom: 2px solid var(--gold-border);
+    }
+
+    .key-table td {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(212, 168, 67, 0.06);
+      vertical-align: top;
+    }
+
+    .key-table tr:hover td {
+      background: var(--gold-faint);
+    }
+
+    .key-table kbd {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--gold-light);
+      background: var(--bg-mid);
+      border: 1px solid var(--gold-border);
+      padding: 2px 8px;
+      border-radius: 3px;
+      white-space: nowrap;
+    }
+
+    /* ============================================================
+       Tab Reference Cards
+       ============================================================ */
+    .tab-card {
+      background: var(--gold-faint);
+      border: 1px solid var(--gold-border);
+      padding: 28px 32px;
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    .tab-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--gold-dark), transparent);
+    }
+
+    .tab-card-title {
+      font-family: var(--font-heading);
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-warm);
+      margin-bottom: 12px;
+    }
+
+    .tab-card p {
+      margin-bottom: 10px;
+    }
+
+    .tab-card ul {
+      padding-left: 20px;
+    }
+
+    /* ============================================================
+       Config File Table
+       ============================================================ */
+    .config-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 24px;
+    }
+
+    .config-table th {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--gold);
+      text-align: left;
+      padding: 10px 16px;
+      border-bottom: 2px solid var(--gold-border);
+    }
+
+    .config-table td {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(212, 168, 67, 0.06);
+      vertical-align: top;
+    }
+
+    .config-table td code {
+      white-space: nowrap;
+    }
+
+    .config-table tr:hover td {
+      background: var(--gold-faint);
+    }
+
+    /* ============================================================
+       Callout / Note
+       ============================================================ */
+    .callout {
+      background: rgba(139, 0, 0, 0.08);
+      border-left: 3px solid var(--red-deep);
+      padding: 16px 20px;
+      margin-bottom: 20px;
+    }
+
+    .callout p {
+      margin-bottom: 0;
+    }
+
+    .callout strong {
+      color: var(--text-warm);
+    }
+
+    .callout-info {
+      background: rgba(212, 168, 67, 0.06);
+      border-left-color: var(--gold-dark);
+    }
+
+    /* ============================================================
+       Gold rule divider
+       ============================================================ */
+    .gold-rule {
+      width: 80px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+      margin: 24px 0;
+    }
+
+    /* ============================================================
+       Footer
+       ============================================================ */
+    .docs-footer {
+      margin-left: var(--sidebar-width);
+      padding: 40px 56px;
+      border-top: 1px solid rgba(212, 168, 67, 0.08);
+      text-align: center;
+    }
+
+    .docs-footer p {
+      font-size: 0.8rem;
+      color: var(--text-faint);
+      font-family: var(--font-mono);
+      letter-spacing: 1px;
+    }
+
+    /* ============================================================
+       Responsive
+       ============================================================ */
+    @media (max-width: 1024px) {
+      .docs-main {
+        padding: 40px 36px 100px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      :root {
+        --sidebar-width: 0px;
+      }
+
+      .sidebar {
+        display: none;
+      }
+
+      .docs-main {
+        margin-left: 0;
+        padding: 32px 24px 80px;
+      }
+
+      .docs-footer {
+        margin-left: 0;
+        padding: 32px 24px;
+      }
+
+      .docs-main h1 {
+        font-size: 2.2rem;
+      }
+
+      .docs-main h2 {
+        font-size: 1.6rem;
+        margin-top: 48px;
+      }
+
+      .key-table, .config-table {
+        font-size: 0.85rem;
+      }
+
+      .key-table td, .config-table td,
+      .key-table th, .config-table th {
+        padding: 8px 10px;
+      }
+
+      .topnav {
+        padding: 0 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================
+       Top Navigation
+       ============================================================ -->
+  <nav class="topnav">
+    <a href="index.html" class="topnav-brand">The Associate</a>
+    <div class="topnav-links">
+      <a href="index.html">Home</a>
+      <a href="docs.html" class="active">Docs</a>
+    </div>
+  </nav>
+
+  <!-- ============================================================
+       Layout
+       ============================================================ -->
+  <div class="docs-layout">
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-heading">Getting Started</div>
+        <a href="#prerequisites" class="sidebar-link">Prerequisites</a>
+        <a href="#installation" class="sidebar-link">Installation</a>
+        <a href="#usage" class="sidebar-link">Usage</a>
+        <a href="#usage-tui" class="sidebar-link sub">TUI Dashboard</a>
+        <a href="#usage-launch" class="sidebar-link sub">Side-by-Side Launch</a>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-heading">Configuration</div>
+        <a href="#configuration" class="sidebar-link">Config File</a>
+        <a href="#config-github" class="sidebar-link sub">GitHub</a>
+        <a href="#config-jira" class="sidebar-link sub">Jira</a>
+        <a href="#config-display" class="sidebar-link sub">Display</a>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-heading">Reference</div>
+        <a href="#keybindings" class="sidebar-link">Keyboard Shortcuts</a>
+        <a href="#keybindings-global" class="sidebar-link sub">Global</a>
+        <a href="#keybindings-navigation" class="sidebar-link sub">Navigation</a>
+        <a href="#keybindings-tab-specific" class="sidebar-link sub">Tab-Specific</a>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-heading">Tabs</div>
+        <a href="#tabs" class="sidebar-link">Tabs Overview</a>
+        <a href="#tab-sessions" class="sidebar-link sub">Sessions</a>
+        <a href="#tab-teams" class="sidebar-link sub">Teams</a>
+        <a href="#tab-todos" class="sidebar-link sub">Todos</a>
+        <a href="#tab-git" class="sidebar-link sub">Git</a>
+        <a href="#tab-plans" class="sidebar-link sub">Plans</a>
+        <a href="#tab-prs" class="sidebar-link sub">PRs</a>
+        <a href="#tab-jira" class="sidebar-link sub">Jira</a>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-heading">Advanced</div>
+        <a href="#architecture" class="sidebar-link">Architecture</a>
+        <a href="#path-encoding" class="sidebar-link">Path Encoding</a>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="docs-main">
+
+      <h1><em>The Associate</em> Documentation</h1>
+      <p class="docs-subtitle">
+        A TUI dashboard that monitors Claude Code sessions, teams, git status, and more &mdash; built natively for Windows.
+      </p>
+      <div class="gold-rule"></div>
+
+      <!-- ============================================================
+           PREREQUISITES
+           ============================================================ -->
+      <h2 id="prerequisites">Prerequisites</h2>
+
+      <p>Before building or running The Associate, you need the following installed on your system:</p>
+
+      <ul>
+        <li><strong>Rust toolchain</strong> &mdash; Install via <a href="https://rustup.rs/" target="_blank" rel="noopener">rustup</a>. On Windows, use the GNU target: <code>stable-x86_64-pc-windows-gnu</code>.</li>
+        <li><strong>MSYS2 with MinGW64</strong> &mdash; Required for the GNU linker. Install <a href="https://www.msys2.org/" target="_blank" rel="noopener">MSYS2</a> and ensure <code>C:\msys64\mingw64\bin</code> is available on your PATH.</li>
+        <li><strong>Claude Code CLI</strong> &mdash; The tool this dashboard monitors. The Associate reads data from <code>~/.claude/</code> that Claude Code produces during sessions.</li>
+        <li><strong>Windows Terminal</strong> (recommended) &mdash; Required for the <code>assoc launch</code> side-by-side mode. Available from the Microsoft Store.</li>
+      </ul>
+
+      <h4>Optional integrations</h4>
+      <ul>
+        <li><strong>GitHub CLI (<code>gh</code>)</strong> &mdash; Enables the PRs tab. Must be authenticated via <code>gh auth login</code>.</li>
+        <li><strong>Atlassian CLI (<code>acli</code>)</strong> &mdash; Enables the Jira tab. Must be configured with your Jira instance credentials.</li>
+        <li><strong>Git</strong> &mdash; Required for the Git tab's status and diff features.</li>
+      </ul>
+
+      <!-- ============================================================
+           INSTALLATION
+           ============================================================ -->
+      <h2 id="installation">Installation</h2>
+
+      <h3>Build from source</h3>
+
+      <p>Clone the repository and build the release binary:</p>
+
+      <div class="code-block"><span class="comment"># Set up PATH for Rust + MinGW linker</span>
+export PATH="/c/Users/$USER/.cargo/bin:$PATH:/c/msys64/mingw64/bin"
+
+<span class="comment"># Build the optimized release binary</span>
+cargo build --release</div>
+
+      <p>The binary will be at <code>target/release/assoc.exe</code>. Copy it to a directory on your PATH for easy access.</p>
+
+      <h3>Install directly</h3>
+
+      <div class="code-block">cargo install --path .</div>
+
+      <p>This compiles and installs <code>assoc.exe</code> to <code>~/.cargo/bin/</code>.</p>
+
+      <div class="callout callout-info">
+        <p><strong>Note:</strong> The release profile uses <code>strip = true</code>, <code>lto = true</code>, and <code>opt-level = "z"</code> for a small, optimized binary.</p>
+      </div>
+
+      <!-- ============================================================
+           USAGE
+           ============================================================ -->
+      <h2 id="usage">Usage</h2>
+
+      <p>The Associate has two modes: a standalone TUI dashboard, and a side-by-side launch that opens Claude Code and the dashboard together in Windows Terminal.</p>
+
+      <h3 id="usage-tui">TUI Dashboard</h3>
+
+      <p>Run <code>assoc</code> from your project directory to start the interactive dashboard:</p>
+
+      <div class="code-block"><span class="comment"># Monitor the current directory</span>
+assoc
+
+<span class="comment"># Monitor a specific project</span>
+assoc --cwd C:\dev\myproject</div>
+
+      <p>The dashboard opens in your terminal, showing real-time data from Claude Code's <code>~/.claude/</code> directory for the given project. All data updates automatically via a file watcher &mdash; no manual refresh needed.</p>
+
+      <h3 id="usage-launch">Side-by-Side Launch</h3>
+
+      <p>The <code>launch</code> subcommand opens Windows Terminal with two panes: Claude Code on the left, The Associate on the right.</p>
+
+      <div class="code-block"><span class="comment"># Basic side-by-side launch</span>
+assoc launch
+
+<span class="comment"># Launch with a specific project directory</span>
+assoc launch --cwd C:\dev\myproject
+
+<span class="comment"># Resume a previous Claude Code session</span>
+assoc launch --resume abc123
+
+<span class="comment"># Adjust pane width ratio (0.0-1.0, default 0.5)</span>
+assoc launch --claude-ratio 0.6
+
+<span class="comment"># Set terminal dimensions</span>
+assoc launch --cols 220 --rows 55
+
+<span class="comment"># Pass extra arguments to Claude Code</span>
+assoc launch -- --dangerously-skip-permissions</div>
+
+      <h4>Launch options</h4>
+      <table class="config-table">
+        <thead>
+          <tr>
+            <th>Option</th>
+            <th>Default</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>--cwd &lt;DIR&gt;</code></td>
+            <td>Current directory</td>
+            <td>Project directory to monitor</td>
+          </tr>
+          <tr>
+            <td><code>--resume &lt;ID&gt;</code></td>
+            <td>&mdash;</td>
+            <td>Resume a Claude Code session by ID</td>
+          </tr>
+          <tr>
+            <td><code>--claude-ratio &lt;FLOAT&gt;</code></td>
+            <td><code>0.5</code></td>
+            <td>Claude pane width as a fraction of the terminal</td>
+          </tr>
+          <tr>
+            <td><code>--cols &lt;N&gt;</code></td>
+            <td><code>200</code></td>
+            <td>Terminal width in columns</td>
+          </tr>
+          <tr>
+            <td><code>--rows &lt;N&gt;</code></td>
+            <td><code>50</code></td>
+            <td>Terminal height in rows</td>
+          </tr>
+          <tr>
+            <td><code>-- &lt;ARGS&gt;</code></td>
+            <td>&mdash;</td>
+            <td>Extra arguments passed through to Claude Code</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ============================================================
+           CONFIGURATION
+           ============================================================ -->
+      <h2 id="configuration">Configuration</h2>
+
+      <p>The Associate reads an optional <code>.assoc.toml</code> file from your project directory. This file lets you configure integrations and display settings without passing command-line flags.</p>
+
+      <div class="code-block"><span class="comment"># .assoc.toml - place in your project root</span>
+
+[github]
+repo = "owner/repo-name"    <span class="comment"># Override auto-detected GitHub repo</span>
+
+[jira]
+project = "PROJ"             <span class="comment"># Jira project key for filtering issues</span>
+jql = "assignee = currentUser() AND resolution = Unresolved"
+
+[display]
+tick_rate = 250              <span class="comment"># UI refresh interval in ms (default: 250)</span>
+tail_lines = 200             <span class="comment"># Lines to load from end of transcript (default: 200)</span></div>
+
+      <h3 id="config-github">GitHub settings</h3>
+      <table class="config-table">
+        <thead>
+          <tr><th>Key</th><th>Type</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>github.repo</code></td>
+            <td>String</td>
+            <td>GitHub repository in <code>owner/name</code> format. Overrides automatic detection from the git remote.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 id="config-jira">Jira settings</h3>
+      <table class="config-table">
+        <thead>
+          <tr><th>Key</th><th>Type</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>jira.project</code></td>
+            <td>String</td>
+            <td>Jira project key (e.g. <code>PROJ</code>) used to filter displayed issues.</td>
+          </tr>
+          <tr>
+            <td><code>jira.jql</code></td>
+            <td>String</td>
+            <td>Custom JQL query for fetching issues. Overrides the default query.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 id="config-display">Display settings</h3>
+      <table class="config-table">
+        <thead>
+          <tr><th>Key</th><th>Type</th><th>Default</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>display.tick_rate</code></td>
+            <td>Integer</td>
+            <td><code>250</code></td>
+            <td>How often the UI redraws, in milliseconds.</td>
+          </tr>
+          <tr>
+            <td><code>display.tail_lines</code></td>
+            <td>Integer</td>
+            <td><code>200</code></td>
+            <td>Number of lines loaded from the end of JSONL transcript files on initial read. Higher values load more history but use more memory.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ============================================================
+           KEYBOARD SHORTCUTS
+           ============================================================ -->
+      <h2 id="keybindings">Keyboard Shortcuts</h2>
+
+      <p>The Associate is fully keyboard-driven. Press <kbd>?</kbd> or <kbd>Ctrl+H</kbd> at any time to show the help overlay inside the TUI.</p>
+
+      <h3 id="keybindings-global">Global</h3>
+      <table class="key-table">
+        <thead>
+          <tr><th>Key</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><kbd>q</kbd></td><td>Quit the application</td></tr>
+          <tr><td><kbd>Ctrl+C</kbd></td><td>Quit the application</td></tr>
+          <tr><td><kbd>?</kbd></td><td>Toggle the help overlay</td></tr>
+          <tr><td><kbd>Ctrl+H</kbd></td><td>Toggle the help overlay</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Close help overlay (when open)</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="keybindings-navigation">Navigation</h3>
+      <table class="key-table">
+        <thead>
+          <tr><th>Key</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><kbd>Tab</kbd></td><td>Next tab</td></tr>
+          <tr><td><kbd>Shift+Tab</kbd></td><td>Previous tab</td></tr>
+          <tr><td><kbd>1</kbd> &ndash; <kbd>9</kbd></td><td>Jump to tab by number</td></tr>
+          <tr><td><kbd>j</kbd> / <kbd>Down</kbd></td><td>Navigate down in list or scroll content down</td></tr>
+          <tr><td><kbd>k</kbd> / <kbd>Up</kbd></td><td>Navigate up in list or scroll content up</td></tr>
+          <tr><td><kbd>h</kbd> / <kbd>Left</kbd></td><td>Switch to left pane</td></tr>
+          <tr><td><kbd>l</kbd> / <kbd>Right</kbd></td><td>Switch to right pane</td></tr>
+          <tr><td><kbd>Enter</kbd></td><td>Select item or open content pane</td></tr>
+          <tr><td><kbd>g</kbd></td><td>Jump to top of list or content</td></tr>
+          <tr><td><kbd>G</kbd></td><td>Jump to bottom of list or content</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="keybindings-tab-specific">Tab-Specific</h3>
+      <table class="key-table">
+        <thead>
+          <tr><th>Key</th><th>Tab</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><kbd>f</kbd></td><td>Sessions</td><td>Toggle follow mode (auto-scroll to latest output)</td></tr>
+          <tr><td><kbd>s</kbd></td><td>Sessions</td><td>Cycle through subagent transcripts</td></tr>
+          <tr><td><kbd>b</kbd></td><td>Git</td><td>Toggle between git status view and file browser</td></tr>
+          <tr><td><kbd>e</kbd></td><td>Git (browser)</td><td>Edit the currently viewed file</td></tr>
+          <tr><td><kbd>Ctrl+S</kbd></td><td>Git (browser)</td><td>Save the file being edited</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Git (browser)</td><td>Cancel editing</td></tr>
+          <tr><td><kbd>Backspace</kbd></td><td>Git (browser)</td><td>Collapse directory or navigate to parent</td></tr>
+          <tr><td><kbd>o</kbd></td><td>PRs / Jira</td><td>Open the selected item in your web browser</td></tr>
+          <tr><td><kbd>r</kbd></td><td>PRs / Jira</td><td>Refresh data from the remote service</td></tr>
+          <tr><td><kbd>t</kbd></td><td>Jira</td><td>Show available status transitions for selected issue</td></tr>
+          <tr><td><kbd>/</kbd></td><td>Jira</td><td>Enter search mode (type query, press Enter to search, Esc to cancel)</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ============================================================
+           TABS REFERENCE
+           ============================================================ -->
+      <h2 id="tabs">Tabs Reference</h2>
+
+      <p>The Associate displays up to seven tabs. The first five are always visible; the PRs and Jira tabs appear only when their respective CLI tools are detected.</p>
+
+      <div class="callout callout-info">
+        <p><strong>Pane pattern:</strong> Every tab uses a left/right pane layout. The left pane shows a list; the right pane shows detail for the selected item. Use <kbd>h</kbd>/<kbd>l</kbd> to switch between panes.</p>
+      </div>
+
+      <div class="tab-card" id="tab-sessions">
+        <h3 class="tab-card-title">1. Sessions</h3>
+        <p>Displays all Claude Code sessions for the current project, sorted by most recent. The right pane shows the live transcript for the selected session.</p>
+        <ul>
+          <li><strong>Follow mode</strong> (<kbd>f</kbd>) &mdash; When active, the transcript auto-scrolls to the latest output as Claude Code writes to the session file. Scrolling up manually disables follow mode; pressing <kbd>G</kbd> re-enables it.</li>
+          <li><strong>Subagent cycling</strong> (<kbd>s</kbd>) &mdash; If the session has spawned subagents (team members), press <kbd>s</kbd> to cycle through their individual transcripts. Press <kbd>s</kbd> again past the last subagent to return to the main transcript.</li>
+          <li><strong>Incremental loading</strong> &mdash; Only the last 200 lines (configurable via <code>display.tail_lines</code>) are loaded initially. New lines are read incrementally as they appear.</li>
+        </ul>
+      </div>
+
+      <div class="tab-card" id="tab-teams">
+        <h3 class="tab-card-title">2. Teams</h3>
+        <p>Monitors Claude Code multi-agent teams configured in <code>~/.claude/teams/</code>. Uses a four-pane drill-down: Teams &rarr; Members &rarr; Tasks &rarr; Detail.</p>
+        <ul>
+          <li><strong>Teams pane</strong> &mdash; Lists all team configurations found for the current project.</li>
+          <li><strong>Members pane</strong> &mdash; Shows team members with their current status (starting, working, idle, shutdown). Lead agents are indicated.</li>
+          <li><strong>Tasks pane</strong> &mdash; Lists all tasks for the selected team, color-coded by status (pending, in progress, completed).</li>
+          <li><strong>Detail pane</strong> &mdash; Shows task details or inbox messages for the selected member.</li>
+        </ul>
+      </div>
+
+      <div class="tab-card" id="tab-todos">
+        <h3 class="tab-card-title">3. Todos</h3>
+        <p>Aggregates all todo files from <code>~/.claude/todos/</code> into a unified view. Left pane lists todo files; right pane shows the individual items within the selected file.</p>
+      </div>
+
+      <div class="tab-card" id="tab-git">
+        <h3 class="tab-card-title">4. Git</h3>
+        <p>Shows the git status for your project directory. Has two modes, toggled with <kbd>b</kbd>:</p>
+        <ul>
+          <li><strong>Status mode</strong> (default) &mdash; Left pane shows staged, unstaged, and untracked files grouped by section. Right pane shows the diff for the selected file.</li>
+          <li><strong>Browse mode</strong> &mdash; A full file browser for navigating the project tree. Select files to preview their contents. Press <kbd>e</kbd> to edit, <kbd>Ctrl+S</kbd> to save, <kbd>Esc</kbd> to cancel.</li>
+        </ul>
+      </div>
+
+      <div class="tab-card" id="tab-plans">
+        <h3 class="tab-card-title">5. Plans</h3>
+        <p>Displays plan files from <code>~/.claude/</code>. Left pane lists available plan files; right pane renders the markdown content with syntax-aware formatting (headings, code blocks).</p>
+      </div>
+
+      <div class="tab-card" id="tab-prs">
+        <h3 class="tab-card-title">6. PRs</h3>
+        <p>Shows open pull requests from the project's GitHub repository. Requires the <code>gh</code> CLI to be installed and authenticated.</p>
+        <ul>
+          <li>PRs are categorized into sections (e.g. authored by you, review requested, etc.).</li>
+          <li>Review status is color-coded: approved (green), changes requested (red), pending review (yellow), draft (gray).</li>
+          <li>A <strong>*</strong> badge appears on the tab name when new activity is detected.</li>
+          <li>Data is polled every 60 seconds. Press <kbd>r</kbd> to refresh manually, <kbd>o</kbd> to open in your browser.</li>
+        </ul>
+        <div class="callout callout-info">
+          <p>The repository is auto-detected from the git remote. Override it in <code>.assoc.toml</code> with <code>github.repo = "owner/name"</code>.</p>
+        </div>
+      </div>
+
+      <div class="tab-card" id="tab-jira">
+        <h3 class="tab-card-title">7. Jira</h3>
+        <p>Displays Jira issues for the current user. Requires the Atlassian CLI (<code>acli</code>) to be installed and configured.</p>
+        <ul>
+          <li>Issues are grouped by status (To Do, In Progress, Done) and color-coded by type (bug, story, task).</li>
+          <li>Press <kbd>Enter</kbd> to load full issue details in the right pane.</li>
+          <li>Press <kbd>t</kbd> to show available status transitions, then press a number key to execute a transition.</li>
+          <li>Press <kbd>/</kbd> to search issues by text query. Press <kbd>Esc</kbd> to cancel search and return to the default view.</li>
+          <li>Data is polled every 60 seconds. Press <kbd>r</kbd> to refresh manually, <kbd>o</kbd> to open in your browser.</li>
+        </ul>
+      </div>
+
+      <!-- ============================================================
+           ARCHITECTURE
+           ============================================================ -->
+      <h2 id="architecture">Architecture</h2>
+
+      <p>The Associate monitors <code>~/.claude/</code> for changes and re-renders the UI accordingly.</p>
+
+      <h3>Data flow</h3>
+      <ol>
+        <li>A debounced file watcher (200ms) monitors <code>~/.claude/</code> and the project's <code>.git/</code> directory.</li>
+        <li>When a change is detected, the watcher classifies it (session index, transcript, team config, task file, etc.) and sends a typed event through an internal channel.</li>
+        <li>The main event loop receives the event alongside keyboard input and a tick timer.</li>
+        <li>Only the affected data is reloaded &mdash; for example, a transcript change only reloads the transcript, not the teams or todos.</li>
+        <li>The UI re-renders from application state on every frame.</li>
+      </ol>
+
+      <h3>Layers</h3>
+      <ul>
+        <li><strong><code>src/model/</code></strong> &mdash; Serde-derived data types that match Claude Code's JSON format (camelCase field names).</li>
+        <li><strong><code>src/data/</code></strong> &mdash; File loading and parsing. Each module reads from a specific subdirectory of <code>~/.claude/</code>.</li>
+        <li><strong><code>src/ui/</code></strong> &mdash; Stateless render functions. Each tab has its own view file. Theme constants live in <code>theme.rs</code>.</li>
+        <li><strong><code>src/watcher/</code></strong> &mdash; File watcher using the <code>notify</code> crate with debouncing.</li>
+        <li><strong><code>src/app.rs</code></strong> &mdash; Central <code>App</code> struct holding all state, navigation logic, and data reload methods.</li>
+        <li><strong><code>src/config.rs</code></strong> &mdash; Project configuration loading from <code>.assoc.toml</code>.</li>
+      </ul>
+
+      <!-- ============================================================
+           PATH ENCODING
+           ============================================================ -->
+      <h2 id="path-encoding">Path Encoding</h2>
+
+      <p>Claude Code stores per-project data in <code>~/.claude/projects/</code> using an encoded form of the project's absolute path. The Associate uses the same encoding to locate the correct project directory:</p>
+
+      <div class="code-block"><span class="comment"># Encoding rule:</span>
+<span class="comment"># 1. Replace ":\" with "--"</span>
+<span class="comment"># 2. Replace remaining "\" with "-"</span>
+
+C:\dev\myproject  -->  C--dev-myproject
+C:\Users\me\code  -->  C--Users-me-code</div>
+
+      <p>This encoding is handled internally by the <code>path_encoding</code> module. You do not need to perform this encoding yourself &mdash; just pass the actual project path via <code>--cwd</code> and The Associate resolves it automatically.</p>
+
+    </main>
+  </div>
+
+  <!-- ============================================================
+       Footer
+       ============================================================ -->
+  <footer class="docs-footer">
+    <p>The Associate &mdash; Built with Rust, ratatui, and crossterm</p>
+  </footer>
+
+  <!-- ============================================================
+       Scrollspy JavaScript
+       ============================================================ -->
+  <script>
+    (function() {
+      var links = document.querySelectorAll('.sidebar-link');
+      var sections = [];
+
+      links.forEach(function(link) {
+        var href = link.getAttribute('href');
+        if (href && href.charAt(0) === '#') {
+          var target = document.getElementById(href.substring(1));
+          if (target) {
+            sections.push({ el: target, link: link });
+          }
+        }
+      });
+
+      function updateActive() {
+        var scrollY = window.pageYOffset + 80;
+        var active = null;
+
+        for (var i = sections.length - 1; i >= 0; i--) {
+          if (sections[i].el.offsetTop <= scrollY) {
+            active = sections[i];
+            break;
+          }
+        }
+
+        links.forEach(function(link) {
+          link.classList.remove('active');
+        });
+
+        if (active) {
+          active.link.classList.add('active');
+        }
+      }
+
+      var ticking = false;
+      window.addEventListener('scroll', function() {
+        if (!ticking) {
+          requestAnimationFrame(function() {
+            updateActive();
+            ticking = false;
+          });
+          ticking = true;
+        }
+      });
+
+      updateActive();
+    })();
+  </script>
+
+</body>
+</html>

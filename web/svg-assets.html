@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Associate — SVG Assets</title>
+<style>
+  body {
+    background: #1a1a2e;
+    color: #D4A843;
+    font-family: Georgia, serif;
+    padding: 2rem;
+  }
+  section {
+    margin-bottom: 3rem;
+  }
+  h2 {
+    border-bottom: 1px solid #333;
+    padding-bottom: 0.5rem;
+    color: #D4A843;
+  }
+  .icon-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    align-items: center;
+  }
+  .icon-item {
+    text-align: center;
+    font-size: 0.85rem;
+    color: #aaa;
+  }
+  svg { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     1. MAIN LOGO — "The Associate" wordmark
+     Godfather-inspired classic serif. Gold on transparent.
+     viewBox sized for ~600px wide rendering.
+     ============================================================ -->
+<section>
+<h2>Main Logo</h2>
+<svg id="logo-main" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 120" width="600" height="120">
+  <defs>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F0D060"/>
+      <stop offset="50%" stop-color="#D4A843"/>
+      <stop offset="100%" stop-color="#A07828"/>
+    </linearGradient>
+    <filter id="logoGlow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
+      <feFlood flood-color="#D4A843" flood-opacity="0.3"/>
+      <feComposite in2="blur" operator="in" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <!-- Thin top rule -->
+  <line x1="50" y1="8" x2="550" y2="8" stroke="#D4A843" stroke-width="0.5" opacity="0.6"/>
+  <!-- "The" in smaller italic caps -->
+  <text x="300" y="38" text-anchor="middle"
+        font-family="'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif"
+        font-size="22" font-style="italic" letter-spacing="8"
+        fill="url(#goldGrad)" filter="url(#logoGlow)">THE</text>
+  <!-- "Associate" main wordmark -->
+  <text x="300" y="88" text-anchor="middle"
+        font-family="'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif"
+        font-size="58" font-weight="bold" letter-spacing="6"
+        fill="url(#goldGrad)" filter="url(#logoGlow)">ASSOCIATE</text>
+  <!-- Thin bottom rule -->
+  <line x1="50" y1="112" x2="550" y2="112" stroke="#D4A843" stroke-width="0.5" opacity="0.6"/>
+  <!-- Small diamond accents on the rules -->
+  <polygon points="300,5 304,8 300,11 296,8" fill="#D4A843" opacity="0.7"/>
+  <polygon points="300,109 304,112 300,115 296,112" fill="#D4A843" opacity="0.7"/>
+</svg>
+</section>
+
+
+<!-- ============================================================
+     2. TAGLINE DECORATION — Ornamental flourishes
+     Thin lines with curls to frame a tagline.
+     ============================================================ -->
+<section>
+<h2>Tagline Decoration</h2>
+<svg id="tagline-decoration" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 30" width="500" height="30">
+  <!-- Left flourish -->
+  <path d="M 30,15 Q 50,5 80,15 Q 95,20 110,15 L 160,15"
+        fill="none" stroke="#D4A843" stroke-width="1" opacity="0.7"/>
+  <circle cx="30" cy="15" r="2" fill="#D4A843" opacity="0.7"/>
+  <circle cx="165" cy="15" r="1.5" fill="#D4A843" opacity="0.5"/>
+  <!-- Center diamond -->
+  <polygon points="250,8 256,15 250,22 244,15" fill="none" stroke="#D4A843" stroke-width="1" opacity="0.7"/>
+  <polygon points="250,11 253,15 250,19 247,15" fill="#D4A843" opacity="0.4"/>
+  <!-- Right flourish (mirrored) -->
+  <path d="M 470,15 Q 450,5 420,15 Q 405,20 390,15 L 340,15"
+        fill="none" stroke="#D4A843" stroke-width="1" opacity="0.7"/>
+  <circle cx="470" cy="15" r="2" fill="#D4A843" opacity="0.7"/>
+  <circle cx="335" cy="15" r="1.5" fill="#D4A843" opacity="0.5"/>
+</svg>
+</section>
+
+
+<!-- ============================================================
+     3. FEATURE ICONS — 48x48, stroke-based, gold (#D4A843)
+     ============================================================ -->
+<section>
+<h2>Feature Icons (48x48)</h2>
+<div class="icon-grid">
+
+<!-- 3a. Sessions: Monitor with live pulse line -->
+<div class="icon-item">
+<svg id="icon-sessions" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Monitor frame -->
+  <rect x="6" y="6" width="36" height="26" rx="2" ry="2"
+        fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <!-- Screen bezel line -->
+  <line x1="6" y1="28" x2="42" y2="28" stroke="#D4A843" stroke-width="1.5" opacity="0.5"/>
+  <!-- Stand -->
+  <line x1="24" y1="32" x2="24" y2="38" stroke="#D4A843" stroke-width="1.5"/>
+  <line x1="16" y1="38" x2="32" y2="38" stroke="#D4A843" stroke-width="1.5"/>
+  <!-- Pulse/heartbeat line on screen -->
+  <polyline points="10,20 15,20 17,14 20,24 23,16 26,20 28,20 30,12 33,22 35,18 38,20"
+            fill="none" stroke="#D4A843" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+<div>Sessions</div>
+</div>
+
+<!-- 3b. Teams: Connected people/nodes -->
+<div class="icon-item">
+<svg id="icon-teams" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Center node (person) -->
+  <circle cx="24" cy="14" r="4" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <path d="M 18,24 Q 18,20 24,18 Q 30,20 30,24" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <!-- Left node -->
+  <circle cx="10" cy="32" r="3.5" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <path d="M 5,40 Q 5,37 10,35.5 Q 15,37 15,40" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <!-- Right node -->
+  <circle cx="38" cy="32" r="3.5" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <path d="M 33,40 Q 33,37 38,35.5 Q 43,37 43,40" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <!-- Connection lines -->
+  <line x1="20" y1="22" x2="12" y2="29" stroke="#D4A843" stroke-width="1" opacity="0.6" stroke-dasharray="2,2"/>
+  <line x1="28" y1="22" x2="36" y2="29" stroke="#D4A843" stroke-width="1" opacity="0.6" stroke-dasharray="2,2"/>
+  <line x1="14" y1="34" x2="34" y2="34" stroke="#D4A843" stroke-width="1" opacity="0.4" stroke-dasharray="2,2"/>
+</svg>
+<div>Teams</div>
+</div>
+
+<!-- 3c. Todos: Checklist with checkmark -->
+<div class="icon-item">
+<svg id="icon-todos" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Paper -->
+  <rect x="10" y="4" width="28" height="40" rx="2" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <!-- Checkbox 1 (checked) -->
+  <rect x="14" y="10" width="6" height="6" rx="1" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <polyline points="15,13.5 16.5,15 20,11" fill="none" stroke="#D4A843" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="24" y1="13" x2="34" y2="13" stroke="#D4A843" stroke-width="1.5" opacity="0.6"/>
+  <!-- Checkbox 2 (checked) -->
+  <rect x="14" y="21" width="6" height="6" rx="1" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <polyline points="15,24.5 16.5,26 20,22" fill="none" stroke="#D4A843" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="24" y1="24" x2="34" y2="24" stroke="#D4A843" stroke-width="1.5" opacity="0.6"/>
+  <!-- Checkbox 3 (empty) -->
+  <rect x="14" y="32" width="6" height="6" rx="1" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <line x1="24" y1="35" x2="34" y2="35" stroke="#D4A843" stroke-width="1.5" opacity="0.6"/>
+</svg>
+<div>Todos</div>
+</div>
+
+<!-- 3d. Git: Branch/fork symbol -->
+<div class="icon-item">
+<svg id="icon-git" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Main branch line -->
+  <line x1="16" y1="10" x2="16" y2="38" stroke="#D4A843" stroke-width="1.5"/>
+  <!-- Branch line -->
+  <path d="M 16,20 Q 24,20 32,14" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <!-- Merge line -->
+  <path d="M 32,18 Q 28,26 16,30" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <!-- Commit dots on main -->
+  <circle cx="16" cy="10" r="3" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <circle cx="16" cy="20" r="3" fill="#1a1a2e" stroke="#D4A843" stroke-width="1.5"/>
+  <circle cx="16" cy="30" r="3" fill="#1a1a2e" stroke="#D4A843" stroke-width="1.5"/>
+  <circle cx="16" cy="38" r="3" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <!-- Branch commit -->
+  <circle cx="32" cy="14" r="3" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <circle cx="32" cy="18" r="3" fill="none" stroke="#D4A843" stroke-width="1.5" opacity="0.7"/>
+</svg>
+<div>Git</div>
+</div>
+
+<!-- 3e. Plans: Document with outline/structure -->
+<div class="icon-item">
+<svg id="icon-plans" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Document with folded corner -->
+  <path d="M 10,4 L 32,4 L 38,10 L 38,44 L 10,44 Z" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <path d="M 32,4 L 32,10 L 38,10" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <!-- Outline structure lines -->
+  <line x1="14" y1="16" x2="34" y2="16" stroke="#D4A843" stroke-width="1.5" opacity="0.8"/>
+  <line x1="18" y1="22" x2="34" y2="22" stroke="#D4A843" stroke-width="1.5" opacity="0.6"/>
+  <line x1="18" y1="28" x2="30" y2="28" stroke="#D4A843" stroke-width="1.5" opacity="0.6"/>
+  <line x1="14" y1="34" x2="34" y2="34" stroke="#D4A843" stroke-width="1.5" opacity="0.8"/>
+  <line x1="18" y1="40" x2="28" y2="40" stroke="#D4A843" stroke-width="1.5" opacity="0.6"/>
+  <!-- Bullet dots -->
+  <circle cx="15" cy="22" r="1.2" fill="#D4A843" opacity="0.6"/>
+  <circle cx="15" cy="28" r="1.2" fill="#D4A843" opacity="0.6"/>
+  <circle cx="15" cy="40" r="1.2" fill="#D4A843" opacity="0.6"/>
+</svg>
+<div>Plans</div>
+</div>
+
+<!-- 3f. Terminal: Command prompt / terminal window -->
+<div class="icon-item">
+<svg id="icon-terminal" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Window frame -->
+  <rect x="4" y="6" width="40" height="36" rx="3" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <!-- Title bar -->
+  <line x1="4" y1="14" x2="44" y2="14" stroke="#D4A843" stroke-width="1.5" opacity="0.5"/>
+  <!-- Title bar dots -->
+  <circle cx="10" cy="10" r="1.5" fill="#8B0000" opacity="0.8"/>
+  <circle cx="16" cy="10" r="1.5" fill="#D4A843" opacity="0.5"/>
+  <circle cx="22" cy="10" r="1.5" fill="#D4A843" opacity="0.3"/>
+  <!-- Prompt chevron > -->
+  <polyline points="10,22 16,26 10,30" fill="none" stroke="#D4A843" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Cursor line -->
+  <line x1="20" y1="26" x2="34" y2="26" stroke="#D4A843" stroke-width="1.5" opacity="0.6"/>
+  <!-- Second line hint -->
+  <line x1="20" y1="33" x2="28" y2="33" stroke="#D4A843" stroke-width="1.5" opacity="0.3"/>
+</svg>
+<div>Terminal</div>
+</div>
+
+<!-- 3g. Jira: Ticket/card icon -->
+<div class="icon-item">
+<svg id="icon-jira" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Card/ticket shape with notch -->
+  <path d="M 8,6 L 40,6 L 40,42 L 8,42 Z" fill="none" stroke="#D4A843" stroke-width="1.5" rx="2"/>
+  <rect x="8" y="6" width="32" height="36" rx="2" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <!-- Top color band -->
+  <rect x="8" y="6" width="32" height="8" rx="2" fill="#D4A843" opacity="0.15"/>
+  <line x1="8" y1="14" x2="40" y2="14" stroke="#D4A843" stroke-width="1" opacity="0.5"/>
+  <!-- Ticket type icon (small square) -->
+  <rect x="12" y="9" width="4" height="4" rx="0.5" fill="#D4A843" opacity="0.6"/>
+  <!-- Ticket ID text line -->
+  <line x1="19" y1="11" x2="30" y2="11" stroke="#D4A843" stroke-width="1.5" opacity="0.6"/>
+  <!-- Content lines -->
+  <line x1="12" y1="20" x2="36" y2="20" stroke="#D4A843" stroke-width="1.5" opacity="0.5"/>
+  <line x1="12" y1="26" x2="32" y2="26" stroke="#D4A843" stroke-width="1.5" opacity="0.4"/>
+  <line x1="12" y1="32" x2="28" y2="32" stroke="#D4A843" stroke-width="1.5" opacity="0.3"/>
+  <!-- Status badge -->
+  <rect x="26" y="36" width="10" height="4" rx="2" fill="none" stroke="#D4A843" stroke-width="1" opacity="0.5"/>
+</svg>
+<div>Jira</div>
+</div>
+
+<!-- 3h. File Browse: Folder with magnifying glass -->
+<div class="icon-item">
+<svg id="icon-filebrowse" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Folder shape -->
+  <path d="M 4,12 L 4,40 L 36,40 L 36,16 L 20,16 L 17,12 Z"
+        fill="none" stroke="#D4A843" stroke-width="1.5" stroke-linejoin="round"/>
+  <!-- Folder tab -->
+  <path d="M 4,12 L 17,12 L 20,16" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <!-- Magnifying glass -->
+  <circle cx="33" cy="26" r="7" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <line x1="38" y1="31" x2="44" y2="37" stroke="#D4A843" stroke-width="2" stroke-linecap="round"/>
+  <!-- Shine on glass -->
+  <path d="M 30,22 Q 28,24 30,26" fill="none" stroke="#D4A843" stroke-width="1" opacity="0.4"/>
+</svg>
+<div>File Browse</div>
+</div>
+
+</div>
+</section>
+
+
+<!-- ============================================================
+     4. VALUE PROP ICONS — 64x64, larger emphasis
+     ============================================================ -->
+<section>
+<h2>Value Prop Icons (64x64)</h2>
+<div class="icon-grid">
+
+<!-- 4a. "No TMUX": Crossed-out TMUX text -->
+<div class="icon-item">
+<svg id="icon-no-tmux" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Circle with slash (prohibition sign) -->
+  <circle cx="32" cy="32" r="26" fill="none" stroke="#8B0000" stroke-width="2"/>
+  <line x1="14" y1="50" x2="50" y2="14" stroke="#8B0000" stroke-width="2"/>
+  <!-- TMUX text -->
+  <text x="32" y="37" text-anchor="middle"
+        font-family="'Courier New', monospace" font-size="13" font-weight="bold"
+        fill="#D4A843" opacity="0.8">tmux</text>
+</svg>
+<div>No TMUX Needed</div>
+</div>
+
+<!-- 4b. "Windows": Stylized Windows logo -->
+<div class="icon-item">
+<svg id="icon-windows" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Windows 4-pane logo, slightly tilted/perspective -->
+  <!-- Top-left pane -->
+  <path d="M 10,14 L 29,11 L 29,30 L 10,30 Z" fill="none" stroke="#D4A843" stroke-width="1.5" stroke-linejoin="round"/>
+  <!-- Top-right pane -->
+  <path d="M 33,10 L 54,7 L 54,30 L 33,30 Z" fill="none" stroke="#D4A843" stroke-width="1.5" stroke-linejoin="round"/>
+  <!-- Bottom-left pane -->
+  <path d="M 10,34 L 29,34 L 29,53 L 10,50 Z" fill="none" stroke="#D4A843" stroke-width="1.5" stroke-linejoin="round"/>
+  <!-- Bottom-right pane -->
+  <path d="M 33,34 L 54,34 L 54,57 L 33,54 Z" fill="none" stroke="#D4A843" stroke-width="1.5" stroke-linejoin="round"/>
+  <!-- Subtle fill -->
+  <path d="M 10,14 L 29,11 L 29,30 L 10,30 Z" fill="#D4A843" opacity="0.08"/>
+  <path d="M 33,10 L 54,7 L 54,30 L 33,30 Z" fill="#D4A843" opacity="0.08"/>
+  <path d="M 10,34 L 29,34 L 29,53 L 10,50 Z" fill="#D4A843" opacity="0.08"/>
+  <path d="M 33,34 L 54,34 L 54,57 L 33,54 Z" fill="#D4A843" opacity="0.08"/>
+</svg>
+<div>Windows Native</div>
+</div>
+
+<!-- 4c. "Fingertips": Dashboard/touch icon -->
+<div class="icon-item">
+<svg id="icon-fingertips" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Dashboard frame -->
+  <rect x="6" y="10" width="52" height="36" rx="3" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+  <!-- Dashboard grid panes -->
+  <rect x="10" y="14" width="20" height="14" rx="1" fill="none" stroke="#D4A843" stroke-width="1" opacity="0.5"/>
+  <rect x="34" y="14" width="20" height="6" rx="1" fill="none" stroke="#D4A843" stroke-width="1" opacity="0.5"/>
+  <rect x="34" y="24" width="20" height="4" rx="1" fill="#D4A843" opacity="0.15"/>
+  <rect x="10" y="32" width="10" height="10" rx="1" fill="none" stroke="#D4A843" stroke-width="1" opacity="0.4"/>
+  <rect x="24" y="32" width="10" height="10" rx="1" fill="none" stroke="#D4A843" stroke-width="1" opacity="0.4"/>
+  <rect x="38" y="32" width="16" height="10" rx="1" fill="none" stroke="#D4A843" stroke-width="1" opacity="0.4"/>
+  <!-- Hand/finger touch indicator below -->
+  <path d="M 28,50 Q 28,46 32,46 Q 36,46 36,50"
+        fill="none" stroke="#D4A843" stroke-width="1.5" opacity="0.7"/>
+  <circle cx="32" cy="52" r="2" fill="#D4A843" opacity="0.6"/>
+  <!-- Touch ripple -->
+  <circle cx="32" cy="52" r="5" fill="none" stroke="#D4A843" stroke-width="0.8" opacity="0.3"/>
+  <circle cx="32" cy="52" r="8" fill="none" stroke="#D4A843" stroke-width="0.5" opacity="0.15"/>
+</svg>
+<div>At Your Fingertips</div>
+</div>
+
+</div>
+</section>
+
+
+<!-- ============================================================
+     5. DECORATIVE DIVIDER — Horizontal with rose/Italian ornament
+     ============================================================ -->
+<section>
+<h2>Decorative Divider</h2>
+<svg id="divider" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 40" width="800" height="40">
+  <!-- Left line -->
+  <line x1="40" y1="20" x2="340" y2="20" stroke="#D4A843" stroke-width="0.75" opacity="0.5"/>
+  <!-- Fade-in effect on left -->
+  <line x1="0" y1="20" x2="40" y2="20" stroke="#D4A843" stroke-width="0.75" opacity="0.1"/>
+
+  <!-- Center rose ornament -->
+  <!-- Outer petals -->
+  <ellipse cx="400" cy="14" rx="5" ry="8" fill="none" stroke="#8B0000" stroke-width="1" opacity="0.7" transform="rotate(0,400,20)"/>
+  <ellipse cx="400" cy="14" rx="5" ry="8" fill="none" stroke="#8B0000" stroke-width="1" opacity="0.7" transform="rotate(60,400,20)"/>
+  <ellipse cx="400" cy="14" rx="5" ry="8" fill="none" stroke="#8B0000" stroke-width="1" opacity="0.7" transform="rotate(120,400,20)"/>
+  <ellipse cx="400" cy="14" rx="5" ry="8" fill="none" stroke="#8B0000" stroke-width="1" opacity="0.7" transform="rotate(180,400,20)"/>
+  <ellipse cx="400" cy="14" rx="5" ry="8" fill="none" stroke="#8B0000" stroke-width="1" opacity="0.7" transform="rotate(240,400,20)"/>
+  <ellipse cx="400" cy="14" rx="5" ry="8" fill="none" stroke="#8B0000" stroke-width="1" opacity="0.7" transform="rotate(300,400,20)"/>
+  <!-- Inner rose center -->
+  <circle cx="400" cy="20" r="3" fill="#8B0000" opacity="0.5"/>
+  <circle cx="400" cy="20" r="1.5" fill="#D4A843" opacity="0.6"/>
+  <!-- Small leaf flourishes -->
+  <path d="M 380,22 Q 375,18 370,22 Q 375,26 380,22" fill="none" stroke="#D4A843" stroke-width="0.8" opacity="0.5"/>
+  <path d="M 420,22 Q 425,18 430,22 Q 425,26 420,22" fill="none" stroke="#D4A843" stroke-width="0.8" opacity="0.5"/>
+
+  <!-- Right line -->
+  <line x1="460" y1="20" x2="760" y2="20" stroke="#D4A843" stroke-width="0.75" opacity="0.5"/>
+  <!-- Fade-out effect on right -->
+  <line x1="760" y1="20" x2="800" y2="20" stroke="#D4A843" stroke-width="0.75" opacity="0.1"/>
+
+  <!-- Small diamond accents -->
+  <polygon points="100,17 103,20 100,23 97,20" fill="#D4A843" opacity="0.3"/>
+  <polygon points="200,17 203,20 200,23 197,20" fill="#D4A843" opacity="0.25"/>
+  <polygon points="600,17 603,20 600,23 597,20" fill="#D4A843" opacity="0.25"/>
+  <polygon points="700,17 703,20 700,23 697,20" fill="#D4A843" opacity="0.3"/>
+</svg>
+</section>
+
+
+<!-- ============================================================
+     ADDITIONAL: Compact horizontal rule variant (thinner, no rose)
+     ============================================================ -->
+<section>
+<h2>Simple Divider (compact)</h2>
+<svg id="divider-simple" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 10" width="600" height="10">
+  <line x1="0" y1="5" x2="270" y2="5" stroke="#D4A843" stroke-width="0.5" opacity="0.4"/>
+  <polygon points="300,2 304,5 300,8 296,5" fill="#D4A843" opacity="0.5"/>
+  <line x1="330" y1="5" x2="600" y2="5" stroke="#D4A843" stroke-width="0.5" opacity="0.4"/>
+</svg>
+</section>
+
+</body>
+</html>

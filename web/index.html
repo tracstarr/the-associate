@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Associate — Your Claude Code Command Center</title>
+  <meta name="description" content="A real-time TUI dashboard for Claude Code on Windows. Monitor sessions, teams, git, and more — without leaving your terminal.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ============================================================
+       CSS Custom Properties
+       ============================================================ */
+    :root {
+      /* Backgrounds */
+      --bg-darkest: #0B0B0F;
+      --bg-dark: #12121A;
+      --bg-mid: #1A1A24;
+      --bg-light: #222230;
+
+      /* Gold accent */
+      --gold: #D4A843;
+      --gold-dark: #C9973F;
+      --gold-light: #E8C66A;
+      --gold-faint: rgba(212, 168, 67, 0.05);
+      --gold-border: rgba(212, 168, 67, 0.15);
+      --gold-glow: rgba(212, 168, 67, 0.3);
+
+      /* Red accent */
+      --red-deep: #8B0000;
+      --red-subtle: rgba(139, 0, 0, 0.3);
+
+      /* Text */
+      --text-warm: #F0E6D3;
+      --text-muted: #A09880;
+      --text-faint: #706850;
+
+      /* Typography */
+      --font-heading: 'Playfair Display', Georgia, 'Times New Roman', serif;
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+
+      /* Spacing */
+      --section-padding: 120px 0;
+      --container-width: 1200px;
+    }
+
+    /* ============================================================
+       Reset & Base
+       ============================================================ */
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      font-size: 16px;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background-color: var(--bg-darkest);
+      color: var(--text-warm);
+      line-height: 1.7;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .container {
+      max-width: var(--container-width);
+      margin: 0 auto;
+      padding: 0 40px;
+    }
+
+    a {
+      color: var(--gold);
+      text-decoration: none;
+      transition: color 0.3s ease;
+    }
+
+    a:hover {
+      color: var(--gold-light);
+    }
+
+    /* ============================================================
+       Section Fade-In Animation
+       ============================================================ */
+    .fade-section {
+      opacity: 0;
+      transform: translateY(40px);
+      transition: opacity 0.8s ease, transform 0.8s ease;
+    }
+
+    .fade-section.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ============================================================
+       Decorative Elements
+       ============================================================ */
+    .gold-rule {
+      width: 80px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+      margin: 30px auto;
+    }
+
+    .red-rule {
+      width: 60px;
+      height: 2px;
+      background: var(--red-deep);
+      margin: 20px auto;
+    }
+
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 16px;
+    }
+
+    .section-heading {
+      font-family: var(--font-heading);
+      font-size: 2.8rem;
+      font-weight: 700;
+      color: var(--text-warm);
+      line-height: 1.2;
+      margin-bottom: 20px;
+    }
+
+    .section-subheading {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      max-width: 640px;
+      margin: 0 auto 60px;
+    }
+
+    /* ============================================================
+       HERO
+       ============================================================ */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      position: relative;
+      background: var(--bg-darkest);
+      overflow: hidden;
+    }
+
+    /* Noise texture overlay */
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Radial gold glow behind title */
+    .hero::after {
+      content: '';
+      position: absolute;
+      width: 800px;
+      height: 400px;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -60%);
+      background: radial-gradient(ellipse, rgba(212, 168, 67, 0.06) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      padding: 0 40px;
+    }
+
+    /* Ornamental top line */
+    .hero-ornament {
+      width: 120px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold-dark), transparent);
+      margin: 0 auto 40px;
+    }
+
+    .hero-title {
+      font-family: var(--font-heading);
+      font-size: clamp(3.5rem, 8vw, 7rem);
+      font-weight: 900;
+      color: var(--text-warm);
+      letter-spacing: -0.02em;
+      line-height: 1.05;
+      margin-bottom: 8px;
+      text-shadow:
+        0 0 80px rgba(212, 168, 67, 0.15),
+        0 2px 4px rgba(0, 0, 0, 0.5);
+    }
+
+    .hero-title em {
+      font-style: italic;
+      color: var(--gold);
+    }
+
+    .hero-tagline {
+      font-family: var(--font-mono);
+      font-size: 1rem;
+      font-weight: 500;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 12px;
+    }
+
+    .hero-flourish {
+      display: block;
+      margin: 0 auto 24px;
+      max-width: 400px;
+      width: 70%;
+      height: auto;
+      opacity: 0;
+      animation: heroElementIn 1s ease 1.3s forwards;
+    }
+
+    .hero-subtitle {
+      font-size: 1.25rem;
+      color: var(--text-muted);
+      max-width: 520px;
+      margin: 0 auto 48px;
+      font-weight: 300;
+      line-height: 1.7;
+    }
+
+    .hero-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--bg-darkest);
+      background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+      padding: 14px 36px;
+      border: none;
+      cursor: pointer;
+      letter-spacing: 1px;
+      transition: all 0.3s ease;
+      text-decoration: none;
+    }
+
+    .hero-cta:hover {
+      background: linear-gradient(135deg, var(--gold-light), var(--gold));
+      color: var(--bg-darkest);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(212, 168, 67, 0.25);
+    }
+
+    .hero-scroll-hint {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-faint);
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      animation: scrollBounce 2s infinite;
+    }
+
+    .hero-scroll-hint svg {
+      width: 20px;
+      height: 20px;
+      stroke: var(--text-faint);
+    }
+
+    @keyframes scrollBounce {
+      0%, 100% { transform: translateX(-50%) translateY(0); }
+      50% { transform: translateX(-50%) translateY(8px); }
+    }
+
+    /* Hero logo SVG */
+    .hero-logo {
+      max-width: 500px;
+      width: 80%;
+      height: auto;
+      margin-bottom: 24px;
+      opacity: 0;
+      animation: logoFadeIn 1.5s ease 0.3s forwards;
+    }
+
+    @keyframes logoFadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Hero entrance animations */
+    .hero-title {
+      opacity: 0;
+      animation: heroElementIn 1s ease 0.8s forwards;
+    }
+
+    .hero-tagline {
+      opacity: 0;
+      animation: heroElementIn 1s ease 1.1s forwards;
+    }
+
+    .hero-subtitle {
+      opacity: 0;
+      animation: heroElementIn 1s ease 1.4s forwards;
+    }
+
+    .hero-cta {
+      opacity: 0;
+      animation: heroElementIn 1s ease 1.7s forwards;
+    }
+
+    @keyframes heroElementIn {
+      from { opacity: 0; transform: translateY(15px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Typing cursor for tagline */
+    .typing-cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1em;
+      background: var(--gold);
+      margin-left: 4px;
+      vertical-align: text-bottom;
+      animation: cursorBlink 0.8s step-end infinite;
+    }
+
+    @keyframes cursorBlink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    /* ============================================================
+       VALUE PROPS
+       ============================================================ */
+    .value-props {
+      padding: 100px 0;
+      background: var(--bg-dark);
+      border-top: 1px solid rgba(139, 0, 0, 0.2);
+      border-bottom: 1px solid rgba(139, 0, 0, 0.2);
+    }
+
+    .value-props-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+    }
+
+    .value-card {
+      background: var(--gold-faint);
+      border: 1px solid var(--gold-border);
+      padding: 48px 36px;
+      text-align: center;
+      transition: all 0.4s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .value-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--gold-dark), transparent);
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    .value-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(212, 168, 67, 0.3);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
+    }
+
+    .value-card:hover::before {
+      opacity: 1;
+    }
+
+    .value-card-icon {
+      margin-bottom: 24px;
+    }
+
+    .value-card-icon svg {
+      width: 56px;
+      height: 56px;
+    }
+
+    .value-card-title {
+      font-family: var(--font-heading);
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text-warm);
+      margin-bottom: 16px;
+    }
+
+    .value-card-text {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+
+    /* ============================================================
+       SCREENSHOT SHOWCASE
+       ============================================================ */
+    .showcase {
+      padding: var(--section-padding);
+      background: var(--bg-darkest);
+      text-align: center;
+    }
+
+    .showcase-tabs {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-bottom: 40px;
+      border-bottom: 1px solid rgba(212, 168, 67, 0.1);
+      padding-bottom: 0;
+    }
+
+    .showcase-tab {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 500;
+      letter-spacing: 1px;
+      color: var(--text-faint);
+      background: none;
+      border: none;
+      padding: 12px 20px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      text-transform: uppercase;
+    }
+
+    .showcase-tab::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--gold);
+      transform: scaleX(0);
+      transition: transform 0.3s ease;
+    }
+
+    .showcase-tab:hover {
+      color: var(--text-muted);
+    }
+
+    .showcase-tab.active {
+      color: var(--gold);
+    }
+
+    .showcase-tab.active::after {
+      transform: scaleX(1);
+    }
+
+    .showcase-display {
+      position: relative;
+      max-width: 960px;
+      margin: 0 auto;
+      border: 1px solid var(--gold-border);
+      background: var(--bg-dark);
+      padding: 4px;
+    }
+
+    .showcase-display img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .showcase-display img.fading {
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .showcase-display img.entering {
+      opacity: 1;
+      transition: opacity 0.3s ease;
+    }
+
+    .showcase-caption {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-top: 20px;
+      font-style: italic;
+      font-family: var(--font-heading);
+    }
+
+    /* ============================================================
+       FEATURES GRID
+       ============================================================ */
+    .features {
+      padding: var(--section-padding);
+      background: var(--bg-dark);
+      text-align: center;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 28px;
+      text-align: left;
+    }
+
+    .feature-card {
+      background: var(--gold-faint);
+      border: 1px solid var(--gold-border);
+      padding: 40px 32px;
+      transition: all 0.4s ease;
+      position: relative;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(212, 168, 67, 0.25);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+    }
+
+    .feature-icon {
+      width: 44px;
+      height: 44px;
+      margin-bottom: 20px;
+      color: var(--gold);
+    }
+
+    .feature-icon svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .feature-card-title {
+      font-family: var(--font-heading);
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--text-warm);
+      margin-bottom: 12px;
+    }
+
+    .feature-card-text {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+
+    /* ============================================================
+       HOW IT WORKS
+       ============================================================ */
+    .how-it-works {
+      padding: var(--section-padding);
+      background: var(--bg-darkest);
+      text-align: center;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 48px;
+      margin-top: 60px;
+      position: relative;
+    }
+
+    /* Connecting line between steps */
+    .steps::before {
+      content: '';
+      position: absolute;
+      top: 32px;
+      left: calc(16.67% + 24px);
+      right: calc(16.67% + 24px);
+      height: 1px;
+      background: linear-gradient(90deg, var(--gold-border), var(--gold-dark), var(--gold-border));
+    }
+
+    .step {
+      position: relative;
+    }
+
+    .step-number {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-heading);
+      font-size: 1.5rem;
+      font-weight: 900;
+      color: var(--gold);
+      border: 2px solid var(--gold-dark);
+      background: var(--bg-darkest);
+      position: relative;
+      z-index: 1;
+    }
+
+    .step-title {
+      font-family: var(--font-heading);
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--text-warm);
+      margin-bottom: 12px;
+    }
+
+    .step-code {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--gold);
+      background: rgba(212, 168, 67, 0.08);
+      border: 1px solid var(--gold-border);
+      padding: 10px 18px;
+      display: inline-block;
+      margin-bottom: 16px;
+    }
+
+    .step-text {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+
+    /* ============================================================
+       WHO IT'S FOR
+       ============================================================ */
+    .audience {
+      padding: var(--section-padding);
+      background: var(--bg-dark);
+      text-align: center;
+      border-top: 1px solid rgba(139, 0, 0, 0.2);
+      border-bottom: 1px solid rgba(139, 0, 0, 0.2);
+    }
+
+    .audience-quote {
+      font-family: var(--font-heading);
+      font-size: 1.6rem;
+      font-weight: 400;
+      font-style: italic;
+      color: var(--text-warm);
+      max-width: 800px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    .audience-quote strong {
+      color: var(--gold);
+      font-weight: 700;
+    }
+
+    /* ============================================================
+       FOOTER
+       ============================================================ */
+    .footer {
+      padding: 60px 0;
+      background: var(--bg-darkest);
+      text-align: center;
+      border-top: 1px solid rgba(212, 168, 67, 0.08);
+    }
+
+    .footer-title {
+      font-family: var(--font-heading);
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text-warm);
+      margin-bottom: 8px;
+    }
+
+    .footer-subtitle {
+      font-size: 0.85rem;
+      color: var(--text-faint);
+      margin-bottom: 24px;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      margin-bottom: 32px;
+    }
+
+    .footer-links a {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      transition: color 0.3s ease;
+    }
+
+    .footer-links a:hover {
+      color: var(--gold);
+    }
+
+    .footer-tech {
+      font-size: 0.75rem;
+      color: var(--text-faint);
+      font-family: var(--font-mono);
+      letter-spacing: 1px;
+    }
+
+    /* ============================================================
+       RESPONSIVE
+       ============================================================ */
+    @media (max-width: 1024px) {
+      .features-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      :root {
+        --section-padding: 80px 0;
+      }
+
+      .container {
+        padding: 0 24px;
+      }
+
+      .section-heading {
+        font-size: 2.2rem;
+      }
+
+      .value-props-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+
+      .showcase-tabs {
+        gap: 0;
+      }
+
+      .showcase-tab {
+        font-size: 0.7rem;
+        padding: 10px 12px;
+      }
+
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .steps {
+        grid-template-columns: 1fr;
+        gap: 40px;
+      }
+
+      .steps::before {
+        display: none;
+      }
+
+      .audience-quote {
+        font-size: 1.3rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .hero-title {
+        font-size: 3rem;
+      }
+
+      .hero-tagline {
+        font-size: 0.8rem;
+        letter-spacing: 2px;
+      }
+
+      .hero-subtitle {
+        font-size: 1.05rem;
+      }
+
+      .showcase-tab {
+        font-size: 0.65rem;
+        padding: 8px 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================
+       HERO
+       ============================================================ -->
+  <section class="hero">
+    <div class="hero-content">
+      <div class="hero-ornament"></div>
+      <h1 class="hero-title"><em>The Associate</em></h1>
+      <p class="hero-tagline" id="hero-tagline">Your Claude Code Command Center</p>
+      <svg class="hero-flourish" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 30" width="400" height="24" aria-hidden="true">
+        <path d="M 30,15 Q 50,5 80,15 Q 95,20 110,15 L 160,15" fill="none" stroke="#D4A843" stroke-width="1" opacity="0.7"/>
+        <circle cx="30" cy="15" r="2" fill="#D4A843" opacity="0.7"/>
+        <circle cx="165" cy="15" r="1.5" fill="#D4A843" opacity="0.5"/>
+        <polygon points="250,8 256,15 250,22 244,15" fill="none" stroke="#D4A843" stroke-width="1" opacity="0.7"/>
+        <polygon points="250,11 253,15 250,19 247,15" fill="#D4A843" opacity="0.4"/>
+        <path d="M 470,15 Q 450,5 420,15 Q 405,20 390,15 L 340,15" fill="none" stroke="#D4A843" stroke-width="1" opacity="0.7"/>
+        <circle cx="470" cy="15" r="2" fill="#D4A843" opacity="0.7"/>
+        <circle cx="335" cy="15" r="1.5" fill="#D4A843" opacity="0.5"/>
+      </svg>
+      <p class="hero-subtitle">Monitor sessions, teams, and code &mdash; in real time. Everything you need, right at your fingertips.</p>
+      <a href="#showcase" class="hero-cta">See It in Action</a>
+    </div>
+    <div class="hero-scroll-hint">
+      <span>Scroll</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       VALUE PROPS
+       ============================================================ -->
+  <section class="value-props fade-section">
+    <div class="container">
+      <div class="value-props-grid">
+        <div class="value-card">
+          <div class="value-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+              <circle cx="32" cy="32" r="26" fill="none" stroke="#8B0000" stroke-width="2"/>
+              <line x1="14" y1="50" x2="50" y2="14" stroke="#8B0000" stroke-width="2"/>
+              <text x="32" y="37" text-anchor="middle" font-family="'JetBrains Mono', 'Courier New', monospace" font-size="13" font-weight="bold" fill="#D4A843" opacity="0.8">tmux</text>
+            </svg>
+          </div>
+          <h3 class="value-card-title">No TMUX. No Workarounds.</h3>
+          <p class="value-card-text">Forget Linux-only terminal multiplexers. The Associate is built natively for Windows, with zero dependencies on WSL, TMUX, or screen.</p>
+        </div>
+        <div class="value-card">
+          <div class="value-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+              <path d="M 10,14 L 29,11 L 29,30 L 10,30 Z" fill="#D4A843" opacity="0.08" stroke="#D4A843" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M 33,10 L 54,7 L 54,30 L 33,30 Z" fill="#D4A843" opacity="0.08" stroke="#D4A843" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M 10,34 L 29,34 L 29,53 L 10,50 Z" fill="#D4A843" opacity="0.08" stroke="#D4A843" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M 33,34 L 54,34 L 54,57 L 33,54 Z" fill="#D4A843" opacity="0.08" stroke="#D4A843" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h3 class="value-card-title">Built for Windows Terminal</h3>
+          <p class="value-card-text">One command launches Claude Code and The Associate side by side in Windows Terminal. No configuration, no pane management, just <code style="font-family: var(--font-mono); color: var(--gold); font-size: 0.85em;">assoc launch</code>.</p>
+        </div>
+        <div class="value-card">
+          <div class="value-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+              <rect x="6" y="10" width="52" height="36" rx="3" fill="none" stroke="#D4A843" stroke-width="1.5"/>
+              <rect x="10" y="14" width="20" height="14" rx="1" fill="none" stroke="#D4A843" stroke-width="1" opacity="0.5"/>
+              <rect x="34" y="14" width="20" height="6" rx="1" fill="none" stroke="#D4A843" stroke-width="1" opacity="0.5"/>
+              <rect x="34" y="24" width="20" height="4" rx="1" fill="#D4A843" opacity="0.15"/>
+              <rect x="10" y="32" width="10" height="10" rx="1" fill="none" stroke="#D4A843" stroke-width="1" opacity="0.4"/>
+              <rect x="24" y="32" width="10" height="10" rx="1" fill="none" stroke="#D4A843" stroke-width="1" opacity="0.4"/>
+              <rect x="38" y="32" width="16" height="10" rx="1" fill="none" stroke="#D4A843" stroke-width="1" opacity="0.4"/>
+              <path d="M 28,50 Q 28,46 32,46 Q 36,46 36,50" fill="none" stroke="#D4A843" stroke-width="1.5" opacity="0.7"/>
+              <circle cx="32" cy="52" r="2" fill="#D4A843" opacity="0.6"/>
+            </svg>
+          </div>
+          <h3 class="value-card-title">Everything at Your Fingertips</h3>
+          <p class="value-card-text">Sessions, teams, todos, git status, plans, PRs, Jira &mdash; all in a single keyboard-driven dashboard. No window switching required.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       SCREENSHOT SHOWCASE
+       ============================================================ -->
+  <section class="showcase fade-section" id="showcase">
+    <div class="container">
+      <p class="section-label">See It In Action</p>
+      <h2 class="section-heading">The Dashboard</h2>
+      <div class="red-rule"></div>
+      <p class="section-subheading">Nine tabs of real-time intelligence. Keyboard-driven, fast, and always up to date.</p>
+
+      <nav class="showcase-tabs" role="tablist">
+        <button class="showcase-tab active" role="tab" data-img="images/Sessions.png" data-caption="Live session transcripts with follow mode and subagent cycling.">Sessions</button>
+        <button class="showcase-tab" role="tab" data-img="images/Teams.png" data-caption="Monitor multi-agent teams, tasks, and coordination in real time.">Teams</button>
+        <button class="showcase-tab" role="tab" data-img="images/Todos.png" data-caption="Track todos across all your Claude Code sessions at a glance.">Todos</button>
+        <button class="showcase-tab" role="tab" data-img="images/Git.png" data-caption="Staged, unstaged, and untracked files with full diff viewing.">Git</button>
+        <button class="showcase-tab" role="tab" data-img="images/Plans.png" data-caption="Browse execution plans and markdown documents inline.">Plans</button>
+        <button class="showcase-tab" role="tab" data-img="images/FileBrowse.png" data-caption="Navigate and preview files directly in the dashboard.">Files</button>
+        <button class="showcase-tab" role="tab" data-img="images/PRs.png" data-caption="Review pull requests without leaving your terminal.">PRs</button>
+        <button class="showcase-tab" role="tab" data-img="images/Jira.png" data-caption="Jira integration for tracking issues alongside your code.">Jira</button>
+        <button class="showcase-tab" role="tab" data-img="images/WindowsTerminalLaunch.png" data-caption="Side-by-side layout: Claude Code on the left, The Associate on the right.">Terminal</button>
+      </nav>
+
+      <div class="showcase-display">
+        <img id="showcase-img" src="images/Sessions.png" alt="The Associate - Sessions tab screenshot">
+      </div>
+      <p class="showcase-caption" id="showcase-caption">Live session transcripts with follow mode and subagent cycling.</p>
+    </div>
+  </section>
+
+  <!-- Decorative divider -->
+  <div style="text-align: center; background: var(--bg-dark); padding: 0; margin: 0; overflow: hidden;">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 40" style="max-width: 700px; width: 80%; height: auto; opacity: 0.7;">
+      <line x1="40" y1="20" x2="340" y2="20" stroke="#D4A843" stroke-width="0.75" opacity="0.5"/>
+      <line x1="0" y1="20" x2="40" y2="20" stroke="#D4A843" stroke-width="0.75" opacity="0.1"/>
+      <ellipse cx="400" cy="14" rx="5" ry="8" fill="none" stroke="#8B0000" stroke-width="1" opacity="0.7" transform="rotate(0,400,20)"/>
+      <ellipse cx="400" cy="14" rx="5" ry="8" fill="none" stroke="#8B0000" stroke-width="1" opacity="0.7" transform="rotate(60,400,20)"/>
+      <ellipse cx="400" cy="14" rx="5" ry="8" fill="none" stroke="#8B0000" stroke-width="1" opacity="0.7" transform="rotate(120,400,20)"/>
+      <ellipse cx="400" cy="14" rx="5" ry="8" fill="none" stroke="#8B0000" stroke-width="1" opacity="0.7" transform="rotate(180,400,20)"/>
+      <ellipse cx="400" cy="14" rx="5" ry="8" fill="none" stroke="#8B0000" stroke-width="1" opacity="0.7" transform="rotate(240,400,20)"/>
+      <ellipse cx="400" cy="14" rx="5" ry="8" fill="none" stroke="#8B0000" stroke-width="1" opacity="0.7" transform="rotate(300,400,20)"/>
+      <circle cx="400" cy="20" r="3" fill="#8B0000" opacity="0.5"/>
+      <circle cx="400" cy="20" r="1.5" fill="#D4A843" opacity="0.6"/>
+      <path d="M 380,22 Q 375,18 370,22 Q 375,26 380,22" fill="none" stroke="#D4A843" stroke-width="0.8" opacity="0.5"/>
+      <path d="M 420,22 Q 425,18 430,22 Q 425,26 420,22" fill="none" stroke="#D4A843" stroke-width="0.8" opacity="0.5"/>
+      <line x1="460" y1="20" x2="760" y2="20" stroke="#D4A843" stroke-width="0.75" opacity="0.5"/>
+      <line x1="760" y1="20" x2="800" y2="20" stroke="#D4A843" stroke-width="0.75" opacity="0.1"/>
+      <polygon points="100,17 103,20 100,23 97,20" fill="#D4A843" opacity="0.3"/>
+      <polygon points="700,17 703,20 700,23 697,20" fill="#D4A843" opacity="0.3"/>
+    </svg>
+  </div>
+
+  <!-- ============================================================
+       FEATURES GRID
+       ============================================================ -->
+  <section class="features fade-section">
+    <div class="container">
+      <p class="section-label">Capabilities</p>
+      <h2 class="section-heading">What You Get</h2>
+      <div class="red-rule"></div>
+      <p class="section-subheading">Six core features designed for developers who demand total visibility into their Claude Code workflow.</p>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+              <rect x="6" y="6" width="36" height="26" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <line x1="6" y1="28" x2="42" y2="28" stroke="currentColor" stroke-width="1.5" opacity="0.5"/>
+              <line x1="24" y1="32" x2="24" y2="38" stroke="currentColor" stroke-width="1.5"/>
+              <line x1="16" y1="38" x2="32" y2="38" stroke="currentColor" stroke-width="1.5"/>
+              <polyline points="10,20 15,20 17,14 20,24 23,16 26,20 28,20 30,12 33,22 35,18 38,20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Live Session Monitoring</h3>
+          <p class="feature-card-text">Watch Claude Code transcripts unfold in real time. Follow mode auto-scrolls to the latest output. Cycle through subagent conversations with a single keypress.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+              <circle cx="24" cy="14" r="4" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M 18,24 Q 18,20 24,18 Q 30,20 30,24" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="10" cy="32" r="3.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M 5,40 Q 5,37 10,35.5 Q 15,37 15,40" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="38" cy="32" r="3.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M 33,40 Q 33,37 38,35.5 Q 43,37 43,40" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <line x1="20" y1="22" x2="12" y2="29" stroke="currentColor" stroke-width="1" opacity="0.6" stroke-dasharray="2,2"/>
+              <line x1="28" y1="22" x2="36" y2="29" stroke="currentColor" stroke-width="1" opacity="0.6" stroke-dasharray="2,2"/>
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Team &amp; Agent Tracking</h3>
+          <p class="feature-card-text">Monitor multi-agent teams, their assigned tasks, inbox messages, and cross-agent coordination. Drill down from teams to members to individual task details.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+              <rect x="10" y="4" width="28" height="40" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <rect x="14" y="10" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <polyline points="15,13.5 16.5,15 20,11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="24" y1="13" x2="34" y2="13" stroke="currentColor" stroke-width="1.5" opacity="0.6"/>
+              <rect x="14" y="21" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <polyline points="15,24.5 16.5,26 20,22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="24" y1="24" x2="34" y2="24" stroke="currentColor" stroke-width="1.5" opacity="0.6"/>
+              <rect x="14" y="32" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <line x1="24" y1="35" x2="34" y2="35" stroke="currentColor" stroke-width="1.5" opacity="0.6"/>
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Smart Todo Management</h3>
+          <p class="feature-card-text">Track todos across all your Claude Code sessions in one unified view. See what every agent is working on, what's done, and what's pending.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+              <line x1="16" y1="10" x2="16" y2="38" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M 16,20 Q 24,20 32,14" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M 32,18 Q 28,26 16,30" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="16" cy="10" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="16" cy="20" r="3" fill="var(--bg-dark)" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="16" cy="30" r="3" fill="var(--bg-dark)" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="16" cy="38" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="32" cy="14" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="32" cy="18" r="3" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.7"/>
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Git at a Glance</h3>
+          <p class="feature-card-text">See staged, unstaged, and untracked files at a glance. View full diffs inline without running a single git command. Stay on top of every change.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+              <path d="M 10,4 L 32,4 L 38,10 L 38,44 L 10,44 Z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M 32,4 L 32,10 L 38,10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <line x1="14" y1="16" x2="34" y2="16" stroke="currentColor" stroke-width="1.5" opacity="0.8"/>
+              <line x1="18" y1="22" x2="34" y2="22" stroke="currentColor" stroke-width="1.5" opacity="0.6"/>
+              <line x1="18" y1="28" x2="30" y2="28" stroke="currentColor" stroke-width="1.5" opacity="0.6"/>
+              <line x1="14" y1="34" x2="34" y2="34" stroke="currentColor" stroke-width="1.5" opacity="0.8"/>
+              <circle cx="15" cy="22" r="1.2" fill="currentColor" opacity="0.6"/>
+              <circle cx="15" cy="28" r="1.2" fill="currentColor" opacity="0.6"/>
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Plan Viewer</h3>
+          <p class="feature-card-text">Browse execution plans and markdown documents without leaving your terminal. Full scrollable content rendered in your TUI with syntax-aware formatting.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+              <rect x="4" y="6" width="40" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <line x1="4" y1="14" x2="44" y2="14" stroke="currentColor" stroke-width="1.5" opacity="0.5"/>
+              <circle cx="10" cy="10" r="1.5" fill="#8B0000" opacity="0.8"/>
+              <circle cx="16" cy="10" r="1.5" fill="currentColor" opacity="0.5"/>
+              <circle cx="22" cy="10" r="1.5" fill="currentColor" opacity="0.3"/>
+              <polyline points="10,22 16,26 10,30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="20" y1="26" x2="34" y2="26" stroke="currentColor" stroke-width="1.5" opacity="0.6"/>
+            </svg>
+          </div>
+          <h3 class="feature-card-title">One-Command Launch</h3>
+          <p class="feature-card-text"><code style="font-family: var(--font-mono); color: var(--gold); font-size: 0.85em;">assoc launch</code> opens Windows Terminal with Claude Code on the left and The Associate on the right. Zero setup, instant side-by-side workflow.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       HOW IT WORKS
+       ============================================================ -->
+  <section class="how-it-works fade-section">
+    <div class="container">
+      <p class="section-label">Getting Started</p>
+      <h2 class="section-heading">Three Steps. That's It.</h2>
+      <div class="red-rule"></div>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <h3 class="step-title">Install</h3>
+          <div class="step-code">cargo install assoc</div>
+          <p class="step-text">Or download the prebuilt binary from the releases page. Single executable, no runtime dependencies.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <h3 class="step-title">Launch</h3>
+          <div class="step-code">assoc launch</div>
+          <p class="step-text">Run it from your project directory. Windows Terminal opens with Claude Code and The Associate side by side.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <h3 class="step-title">Monitor</h3>
+          <div class="step-code">Tab / j / k / h / l</div>
+          <p class="step-text">Claude Code on the left, The Associate on the right. Navigate tabs with keyboard shortcuts. Everything updates in real time.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       WHO IT'S FOR
+       ============================================================ -->
+  <section class="audience fade-section">
+    <div class="container">
+      <div class="gold-rule"></div>
+      <p class="audience-quote">
+        Built for developers who <strong>live in Claude Code</strong> on Windows.
+        If you run agents, manage teams, and want eyes on everything
+        without switching windows &mdash; <strong>this is your command center</strong>.
+      </p>
+      <div class="gold-rule"></div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       FOOTER
+       ============================================================ -->
+  <footer class="footer">
+    <div class="container">
+      <p class="footer-title">The Associate</p>
+      <p class="footer-subtitle">A TUI dashboard for Claude Code</p>
+      <nav class="footer-links">
+        <a href="#showcase">Screenshots</a>
+        <a href="docs.html">Documentation</a>
+        <a href="https://github.com/TODO" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/TODO/releases" target="_blank" rel="noopener">Releases</a>
+      </nav>
+      <p class="footer-tech">Built with Rust, ratatui, and crossterm</p>
+    </div>
+  </footer>
+
+  <!-- ============================================================
+       JavaScript
+       ============================================================ -->
+  <script>
+    /* Screenshot Tab Switching with crossfade */
+    (function() {
+      var tabs = document.querySelectorAll('.showcase-tab');
+      var img = document.getElementById('showcase-img');
+      var caption = document.getElementById('showcase-caption');
+      var switching = false;
+
+      tabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+          if (switching) return;
+          var newSrc = tab.getAttribute('data-img');
+          if (img.src.endsWith(newSrc.replace('images/', ''))) return;
+
+          switching = true;
+          tabs.forEach(function(t) { t.classList.remove('active'); });
+          tab.classList.add('active');
+
+          /* Fade out */
+          img.classList.add('fading');
+          img.classList.remove('entering');
+
+          setTimeout(function() {
+            img.src = newSrc;
+            img.alt = 'The Associate - ' + tab.textContent + ' tab screenshot';
+            caption.textContent = tab.getAttribute('data-caption');
+
+            img.onload = function() {
+              img.classList.remove('fading');
+              img.classList.add('entering');
+              switching = false;
+              img.onload = null;
+            };
+          }, 200);
+        });
+      });
+
+      /* Preload all images */
+      tabs.forEach(function(tab) {
+        var preload = new Image();
+        preload.src = tab.getAttribute('data-img');
+      });
+    })();
+
+    /* Fade-in on Scroll (Intersection Observer) */
+    (function() {
+      var sections = document.querySelectorAll('.fade-section');
+      if ('IntersectionObserver' in window) {
+        var observer = new IntersectionObserver(function(entries) {
+          entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('visible');
+              observer.unobserve(entry.target);
+            }
+          });
+        }, { threshold: 0.12 });
+
+        sections.forEach(function(section) {
+          observer.observe(section);
+        });
+      } else {
+        sections.forEach(function(section) {
+          section.classList.add('visible');
+        });
+      }
+    })();
+
+    /* Subtle parallax on hero background glow */
+    (function() {
+      var hero = document.querySelector('.hero');
+      var ticking = false;
+
+      window.addEventListener('scroll', function() {
+        if (!ticking) {
+          requestAnimationFrame(function() {
+            var scrollY = window.pageYOffset;
+            var heroHeight = hero.offsetHeight;
+            if (scrollY < heroHeight) {
+              var offset = scrollY * 0.3;
+              hero.style.backgroundPositionY = offset + 'px';
+              /* Fade out hero content as user scrolls */
+              var opacity = 1 - (scrollY / (heroHeight * 0.6));
+              if (opacity < 0) opacity = 0;
+              hero.querySelector('.hero-content').style.opacity = opacity;
+              hero.querySelector('.hero-content').style.transform = 'translateY(' + (scrollY * 0.15) + 'px)';
+            }
+            ticking = false;
+          });
+          ticking = true;
+        }
+      });
+    })();
+
+    /* Typing effect on tagline */
+    (function() {
+      var tagline = document.getElementById('hero-tagline');
+      if (!tagline) return;
+      var text = tagline.textContent;
+      tagline.textContent = '';
+
+      /* Wait for the tagline animation delay (1.1s) plus a bit */
+      setTimeout(function() {
+        tagline.style.opacity = '1';
+        tagline.style.animation = 'none';
+        var cursor = document.createElement('span');
+        cursor.className = 'typing-cursor';
+        tagline.appendChild(cursor);
+
+        var i = 0;
+        var interval = setInterval(function() {
+          if (i < text.length) {
+            tagline.insertBefore(document.createTextNode(text.charAt(i)), cursor);
+            i++;
+          } else {
+            clearInterval(interval);
+            /* Remove cursor after a pause */
+            setTimeout(function() {
+              cursor.style.animation = 'none';
+              cursor.style.opacity = '0';
+              cursor.style.transition = 'opacity 0.5s ease';
+            }, 2000);
+          }
+        }, 60);
+      }, 1200);
+    })();
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,22 @@
+# The Associate - Project Configuration
+# Place this file in your project root to configure the dashboard.
+
+[github]
+# GitHub repo for the PRs tab (owner/repo format).
+# Overrides auto-detection from git remote origin.
+repo = "owner/repo-name"
+
+[jira]
+# Scope the Jira tab to a specific project key.
+project = "PROJ"
+
+# Custom JQL query for the default issue list.
+# If set, replaces the built-in query entirely.
+# jql = "assignee = currentUser() AND statusCategory not in (Done) ORDER BY updated DESC"
+
+[display]
+# Tick rate in milliseconds (how often the UI refreshes). Default: 250
+# tick_rate = 250
+
+# Number of transcript lines to load on initial read. Default: 200
+# tail_lines = 200

@@ -1,0 +1,10 @@
+{
+    "profiles": [
+        {
+            "name": "Claude Dev",
+            "commandline": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\dev\\associate\\launch.ps1\"",
+            "startingDirectory": "%USERPROFILE%",
+            "hidden": false
+        }
+    ]
+}
