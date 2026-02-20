@@ -40,7 +40,8 @@ Write-Host "Installed to $binaryPath" -ForegroundColor Green
 
 # Add to user PATH if not already there
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-if ($userPath -notlike "*$installDir*") {
+$pathEntries = $userPath -split ';' | ForEach-Object { $_.TrimEnd('\') }
+if ($pathEntries -notcontains $installDir.TrimEnd('\')) {
     [Environment]::SetEnvironmentVariable("Path", "$userPath;$installDir", "User")
     $env:Path = "$env:Path;$installDir"
     Write-Host "Added $installDir to user PATH." -ForegroundColor Green
