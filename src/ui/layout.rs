@@ -11,13 +11,25 @@ use super::{
 use crate::app::{ActiveTab, App, GitMode, SessionsPane};
 
 pub fn draw_layout(f: &mut Frame, app: &App) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
+    let has_input_bar = app.send_mode;
+    let constraints = if has_input_bar {
+        vec![
+            Constraint::Length(1), // Tab bar
+            Constraint::Min(3),    // Content
+            Constraint::Length(1), // Input bar
+            Constraint::Length(1), // Status bar
+        ]
+    } else {
+        vec![
             Constraint::Length(1), // Tab bar
             Constraint::Min(3),    // Content
             Constraint::Length(1), // Status bar
-        ])
+        ]
+    };
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(constraints)
         .split(f.area());
 
     // Tab bar
@@ -26,8 +38,15 @@ pub fn draw_layout(f: &mut Frame, app: &App) {
     // Content area
     draw_content(f, chunks[1], app);
 
-    // Status bar
-    draw_status_bar(f, chunks[2], app);
+    if has_input_bar {
+        // Input bar
+        draw_send_input_bar(f, chunks[2], app);
+        // Status bar
+        draw_status_bar(f, chunks[3], app);
+    } else {
+        // Status bar
+        draw_status_bar(f, chunks[2], app);
+    }
 
     // Delete confirmation overlay
     if app.confirm_delete {
@@ -122,6 +141,21 @@ fn draw_content(f: &mut Frame, area: Rect, app: &App) {
     }
 }
 
+fn draw_send_input_bar(f: &mut Frame, area: Rect, app: &App) {
+    let label = Span::styled(" Send to Claude: ", theme::SEND_LABEL);
+    let cursor_pos = app.send_input.len();
+    let input_text = format!("{}_", &app.send_input);
+    let input = Span::styled(input_text, theme::SEND_INPUT);
+
+    // Fill remaining width with input background
+    let used = 17 + cursor_pos + 1; // label width + input + cursor
+    let remaining = (area.width as usize).saturating_sub(used);
+    let pad = Span::styled(" ".repeat(remaining), theme::SEND_INPUT);
+
+    let line = Line::from(vec![label, input, pad]);
+    f.render_widget(Paragraph::new(line), area);
+}
+
 fn hint_text(app: &App) -> Vec<(&'static str, &'static str)> {
     let mut hints: Vec<(&str, &str)> = match app.active_tab {
         ActiveTab::Sessions => match app.sessions_pane {
@@ -185,6 +219,7 @@ fn hint_text(app: &App) -> Vec<(&'static str, &'static str)> {
         ],
         ActiveTab::Processes => vec![("j/k", "nav"), ("h/l", "panes"), ("x", "kill"), ("s", "jump to session")],
     };
+    hints.push(("i", "send"));
     hints.push(("^H", "help"));
     hints
 }
@@ -236,6 +271,13 @@ fn draw_status_bar(f: &mut Frame, area: Rect, app: &App) {
                 .bg(ratatui::style::Color::Yellow)
                 .add_modifier(ratatui::style::Modifier::BOLD),
         ));
+    }
+
+    // Pane send status
+    if app.send_pending {
+        left_spans.push(Span::styled(" SENDING... ", theme::SEND_PENDING));
+    } else if let Some((ref msg, _)) = app.send_status {
+        left_spans.push(Span::styled(format!(" {} ", msg), theme::SEND_OK));
     }
 
     // Jira search mode indicator

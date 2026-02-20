@@ -120,6 +120,21 @@ pub const LINEAR_UNSTARTED: Style = Style::new()
     .add_modifier(Modifier::BOLD);
 pub const LINEAR_COMPLETED: Style = Style::new().fg(Color::Green).add_modifier(Modifier::BOLD);
 
+// Pane send input bar
+pub const SEND_LABEL: Style = Style::new()
+    .fg(Color::Black)
+    .bg(Color::Cyan)
+    .add_modifier(Modifier::BOLD);
+pub const SEND_INPUT: Style = Style::new().fg(Color::White).bg(Color::DarkGray);
+pub const SEND_PENDING: Style = Style::new()
+    .fg(Color::Black)
+    .bg(Color::Yellow)
+    .add_modifier(Modifier::BOLD);
+pub const SEND_OK: Style = Style::new()
+    .fg(Color::Black)
+    .bg(Color::Green)
+    .add_modifier(Modifier::BOLD);
+
 // Jira
 pub const JIRA_TODO: Style = Style::new()
     .fg(Color::DarkGray)
