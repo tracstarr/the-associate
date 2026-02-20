@@ -54,6 +54,36 @@ Always run a full release build when finished implementing a plan or any code ch
 
 This ensures the binary is up to date and catches any issues not caught by `cargo check`.
 
+## Documentation Requirements
+
+**A change is not complete until the documentation is updated.** Every feature addition, behavior change, new configuration option, new keyboard shortcut, new tab, or UI change **must** include corresponding updates to the relevant documentation files before the work is considered done.
+
+The project has three documentation surfaces that must be kept in sync:
+
+| File | Purpose | When to update |
+|------|---------|---------------|
+| `README.md` | Primary user-facing documentation (install, usage, config, shortcuts, tabs, architecture) | Any user-visible change: new features, new CLI options, new keyboard shortcuts, new/changed configuration keys, new tabs, changed behavior |
+| `docs/docs.html` | Full HTML documentation site (hosted) | Same as README — mirrors all user-facing content in the HTML documentation page |
+| `docs/index.html` | Landing page / marketing site | New features, new tabs, new integrations, or anything that changes the product's capabilities or value proposition |
+
+### Rules
+
+1. **No code-only PRs for user-visible changes.** If a change affects what the user sees, how they interact with the app, or what they can configure, the corresponding docs must be updated in the same commit or PR.
+2. **README.md is the source of truth.** Write the content in `README.md` first, then propagate to `docs/docs.html`. The landing page (`docs/index.html`) should reflect new capabilities but does not need to be a 1:1 copy.
+3. **Update all three files when adding:**
+   - A new tab or removing an existing one
+   - A new keyboard shortcut or changing an existing one
+   - A new `.assoc.toml` configuration key
+   - A new CLI flag or subcommand
+   - A new external integration (e.g., a new issue tracker)
+4. **Update README.md and docs/docs.html when changing:**
+   - Existing behavior or defaults
+   - Architecture or data flow
+   - Build or installation instructions
+5. **Update docs/index.html when adding:**
+   - A headline feature or integration that should be marketed
+   - Changes to supported platforms or prerequisites
+
 ## Lint
 
 No custom rustfmt or clippy configuration — defaults apply.
