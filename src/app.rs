@@ -1,11 +1,14 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::process::{Child, Command};
+use std::sync::mpsc;
 use std::time::Instant;
 
 use crate::config::{self, ProjectConfig};
 use crate::data::{
-    cli_detect, filebrowser, git, github, inboxes, jira, linear, path_encoding, plans, sessions,
-    subagents, tasks, teams, todos, transcripts,
+    cli_detect, filebrowser, git, github, inboxes, jira, linear, path_encoding, plans,
+    process_runner::{self, ProcessOutput},
+    prompt_builder, sessions, subagents, tasks, teams, todos, transcripts,
 };
 use crate::event::FileChange;
 use crate::model::agent_status::{self, AgentStatus};
@@ -16,6 +19,7 @@ use crate::model::inbox::InboxMessage;
 use crate::model::jira::{FlatJiraItem, JiraIssue, JiraTransition};
 use crate::model::linear::{FlatLinearItem, LinearIssue};
 use crate::model::plan::{MarkdownLine, PlanFile as PlanFileModel};
+use crate::model::process::{ProcessStatus, SpawnedProcess, TicketInfo};
 use crate::model::session::SessionEntry;
 use crate::model::task::Task;
 use crate::model::team::{Team, TeamMember};
@@ -33,6 +37,13 @@ pub enum ActiveTab {
     GitHubIssues,
     Jira,
     Linear,
+    Processes,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProcessesPane {
+    List,
+    Output,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -240,6 +251,22 @@ pub struct App {
     pub confirm_delete: bool,
     pub delete_target_name: String,
 
+    // Processes tab
+    pub has_claude: bool,
+    pub processes: Vec<SpawnedProcess>,
+    pub process_children: Vec<(usize, Child)>,
+    pub process_index: usize,
+    pub process_output_scroll: usize,
+    pub processes_pane: ProcessesPane,
+    pub process_tx: Option<mpsc::Sender<ProcessOutput>>,
+    pub process_rx: Option<mpsc::Receiver<ProcessOutput>>,
+    pub next_process_id: usize,
+
+    // Prompt modal
+    pub show_prompt_modal: bool,
+    pub prompt_editor: Option<tui_textarea::TextArea<'static>>,
+    pub prompt_ticket_info: Option<TicketInfo>,
+
     // Status
     pub last_update: Instant,
     pub last_error: Option<String>,
@@ -254,6 +281,7 @@ impl App {
         let has_gh = cli_detect::is_available("gh");
         let has_jira = cli_detect::is_available("acli");
         let has_linear = project_config.linear_api_key().is_some();
+        let has_claude = cli_detect::is_available("claude");
         // Config github.repo overrides git remote detection
         let gh_repo = project_config.github_repo().map(String::from).or_else(|| {
             if has_gh {
@@ -395,6 +423,20 @@ impl App {
             confirm_delete: false,
             delete_target_name: String::new(),
 
+            has_claude,
+            processes: Vec::new(),
+            process_children: Vec::new(),
+            process_index: 0,
+            process_output_scroll: 0,
+            processes_pane: ProcessesPane::List,
+            process_tx: None,
+            process_rx: None,
+            next_process_id: 1,
+
+            show_prompt_modal: false,
+            prompt_editor: None,
+            prompt_ticket_info: None,
+
             last_update: Instant::now(),
             last_error: None,
         }
@@ -420,6 +462,9 @@ impl App {
         }
         if self.has_linear {
             tabs.push(ActiveTab::Linear);
+        }
+        if !self.processes.is_empty() {
+            tabs.push(ActiveTab::Processes);
         }
         tabs
     }
@@ -910,6 +955,17 @@ impl App {
                     self.linear_detail_scroll = self.linear_detail_scroll.saturating_add(1);
                 }
             },
+            ActiveTab::Processes => match self.processes_pane {
+                ProcessesPane::List => {
+                    if !self.processes.is_empty() {
+                        self.process_index = (self.process_index + 1).min(self.processes.len() - 1);
+                        self.process_output_scroll = 0;
+                    }
+                }
+                ProcessesPane::Output => {
+                    self.process_output_scroll = self.process_output_scroll.saturating_add(1);
+                }
+            },
         }
     }
 
@@ -1020,6 +1076,15 @@ impl App {
                     self.linear_detail_scroll = self.linear_detail_scroll.saturating_sub(1);
                 }
             },
+            ActiveTab::Processes => match self.processes_pane {
+                ProcessesPane::List => {
+                    self.process_index = self.process_index.saturating_sub(1);
+                    self.process_output_scroll = 0;
+                }
+                ProcessesPane::Output => {
+                    self.process_output_scroll = self.process_output_scroll.saturating_sub(1);
+                }
+            },
         }
     }
 
@@ -1060,6 +1125,9 @@ impl App {
             }
             ActiveTab::Linear => {
                 self.linear_pane = LinearPane::List;
+            }
+            ActiveTab::Processes => {
+                self.processes_pane = ProcessesPane::List;
             }
         }
     }
@@ -1107,6 +1175,9 @@ impl App {
             ActiveTab::Linear => {
                 self.linear_pane = LinearPane::Detail;
             }
+            ActiveTab::Processes => {
+                self.processes_pane = ProcessesPane::Output;
+            }
         }
     }
 
@@ -1152,6 +1223,11 @@ impl App {
             ActiveTab::Linear => {
                 if self.linear_pane == LinearPane::List {
                     self.linear_open_selected();
+                }
+            }
+            ActiveTab::Processes => {
+                if self.processes_pane == ProcessesPane::List {
+                    self.processes_pane = ProcessesPane::Output;
                 }
             }
             _ => {}
@@ -1255,6 +1331,15 @@ impl App {
                 }
                 LinearPane::Detail => {
                     self.linear_detail_scroll = 0;
+                }
+            },
+            ActiveTab::Processes => match self.processes_pane {
+                ProcessesPane::List => {
+                    self.process_index = 0;
+                    self.process_output_scroll = 0;
+                }
+                ProcessesPane::Output => {
+                    self.process_output_scroll = 0;
                 }
             },
         }
@@ -1422,6 +1507,17 @@ impl App {
                 }
                 LinearPane::Detail => {
                     self.linear_detail_scroll = usize::MAX;
+                }
+            },
+            ActiveTab::Processes => match self.processes_pane {
+                ProcessesPane::List => {
+                    if !self.processes.is_empty() {
+                        self.process_index = self.processes.len() - 1;
+                        self.process_output_scroll = 0;
+                    }
+                }
+                ProcessesPane::Output => {
+                    self.process_output_scroll = usize::MAX;
                 }
             },
         }
@@ -2326,6 +2422,118 @@ impl App {
         }
     }
 
+    // --- Prompt modal helpers ---
+
+    /// Open the prompt modal for the currently selected ticket (any issue management tab).
+    pub fn open_prompt_modal_for_current(&mut self) {
+        if !self.has_claude {
+            self.last_error = Some("claude CLI not found on PATH".to_string());
+            return;
+        }
+
+        let ticket = match self.active_tab {
+            ActiveTab::GitHubPRs => self
+                .gh_selected_pr()
+                .map(prompt_builder::ticket_from_github_pr),
+            ActiveTab::GitHubIssues => self
+                .issues_selected()
+                .map(prompt_builder::ticket_from_github_issue),
+            ActiveTab::Linear => self
+                .linear_selected_issue()
+                .map(prompt_builder::ticket_from_linear),
+            ActiveTab::Jira => self
+                .jira_selected_issue()
+                .map(prompt_builder::ticket_from_jira),
+            _ => None,
+        };
+
+        if let Some(ticket) = ticket {
+            let prompt = prompt_builder::build_default_prompt(&ticket);
+            let mut editor = tui_textarea::TextArea::default();
+            editor.insert_str(&prompt);
+            editor.move_cursor(tui_textarea::CursorMove::Top);
+            editor.move_cursor(tui_textarea::CursorMove::Head);
+
+            self.prompt_editor = Some(editor);
+            self.prompt_ticket_info = Some(ticket);
+            self.show_prompt_modal = true;
+        }
+    }
+
+    /// Confirm and launch the process from the prompt modal.
+    pub fn confirm_prompt_modal(&mut self) {
+        let prompt = if let Some(ref editor) = self.prompt_editor {
+            editor.lines().join("\n")
+        } else {
+            return;
+        };
+
+        let ticket = match self.prompt_ticket_info.take() {
+            Some(t) => t,
+            None => return,
+        };
+
+        self.show_prompt_modal = false;
+        self.prompt_editor = None;
+
+        self.spawn_claude_process(&ticket, &prompt);
+    }
+
+    /// Cancel and close the prompt modal.
+    pub fn cancel_prompt_modal(&mut self) {
+        self.show_prompt_modal = false;
+        self.prompt_editor = None;
+        self.prompt_ticket_info = None;
+    }
+
+    // --- Process management ---
+
+    /// Initialize the process output channel if not already created.
+    fn ensure_process_channel(&mut self) {
+        if self.process_tx.is_none() {
+            let (tx, rx) = mpsc::channel();
+            self.process_tx = Some(tx);
+            self.process_rx = Some(rx);
+        }
+    }
+
+    /// Spawn a new Claude Code process with the given prompt.
+    fn spawn_claude_process(&mut self, ticket: &TicketInfo, prompt: &str) {
+        self.ensure_process_channel();
+
+        let id = self.next_process_id;
+        self.next_process_id += 1;
+
+        let tx = self.process_tx.as_ref().unwrap().clone();
+        match process_runner::spawn_claude_headless(id, prompt, &self.project_cwd, tx) {
+            Ok(child) => {
+                let process = SpawnedProcess {
+                    id,
+                    label: ticket.key.clone(),
+                    title: ticket.title.clone(),
+                    source: ticket.source.clone(),
+                    status: ProcessStatus::Running,
+                    prompt: prompt.to_string(),
+                    cwd: self.project_cwd.clone(),
+                    output_lines: Vec::new(),
+                    error_lines: Vec::new(),
+                    session_id: None,
+                    progress_lines: Vec::new(),
+                };
+                self.processes.push(process);
+                self.process_children.push((id, child));
+
+                // Auto-switch to Processes tab
+                self.active_tab = ActiveTab::Processes;
+                self.process_index = self.processes.len() - 1;
+                self.process_output_scroll = 0;
+            }
+            Err(e) => {
+                self.last_error = Some(format!("Failed to spawn claude: {}", e));
+            }
+        }
+    }
+
     fn linear_skip_to_next_issue(&mut self) {
         if self.linear_flat_list.is_empty() {
             return;
@@ -2386,5 +2594,363 @@ impl App {
                 cli_detect::open_url(&issue.url);
             }
         }
+    }
+
+    /// Poll for process output messages (called from the event loop).
+    pub fn poll_process_output(&mut self) {
+        let rx = match self.process_rx {
+            Some(ref rx) => rx,
+            None => return,
+        };
+
+        while let Ok(msg) = rx.try_recv() {
+            match msg {
+                ProcessOutput::Stdout(id, line) => {
+                    if let Some(proc) = self.processes.iter_mut().find(|p| p.id == id) {
+                        proc.output_lines.push(line.clone());
+                        if let Some((new_lines, sid)) = parse_stream_json_event(&line) {
+                            proc.progress_lines.extend(new_lines);
+                            if proc.session_id.is_none() {
+                                if let Some(s) = sid {
+                                    proc.session_id = Some(s);
+                                }
+                            }
+                        }
+                    }
+                }
+                ProcessOutput::Stderr(id, line) => {
+                    if let Some(proc) = self.processes.iter_mut().find(|p| p.id == id) {
+                        proc.error_lines.push(line);
+                    }
+                }
+                ProcessOutput::Exited(id, success) => {
+                    if let Some(proc) = self.processes.iter_mut().find(|p| p.id == id) {
+                        proc.status = if success {
+                            ProcessStatus::Completed
+                        } else {
+                            ProcessStatus::Failed
+                        };
+                    }
+                    self.process_children.retain(|(pid, _)| *pid != id);
+                }
+            }
+        }
+
+        // Check for exited children
+        let mut exited = Vec::new();
+        for (id, child) in &mut self.process_children {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    exited.push((*id, status.success()));
+                }
+                Ok(None) => {} // still running
+                Err(_) => {
+                    exited.push((*id, false));
+                }
+            }
+        }
+        for (id, success) in exited {
+            if let Some(proc) = self.processes.iter_mut().find(|p| p.id == id) {
+                if proc.status == ProcessStatus::Running {
+                    proc.status = if success {
+                        ProcessStatus::Completed
+                    } else {
+                        ProcessStatus::Failed
+                    };
+                }
+            }
+            self.process_children.retain(|(pid, _)| *pid != id);
+        }
+    }
+
+    /// Get the currently selected process.
+    pub fn selected_process(&self) -> Option<&SpawnedProcess> {
+        if self.processes.is_empty() {
+            return None;
+        }
+        let idx = self.process_index.min(self.processes.len() - 1);
+        Some(&self.processes[idx])
+    }
+
+    /// Kill the currently selected process.
+    pub fn kill_selected_process(&mut self) {
+        if self.processes.is_empty() {
+            return;
+        }
+        let idx = self.process_index.min(self.processes.len() - 1);
+        let id = self.processes[idx].id;
+
+        if self.processes[idx].status != ProcessStatus::Running {
+            return;
+        }
+
+        if let Some(pos) = self.process_children.iter_mut().position(|(pid, _)| *pid == id) {
+            let _ = self.process_children[pos].1.kill();
+            self.process_children.remove(pos);
+        }
+        self.processes[idx].status = ProcessStatus::Failed;
+    }
+
+    /// Jump to the Sessions tab and load the transcript for the selected process's session.
+    /// Open the currently selected session in a new Windows Terminal pane
+    /// running `claude --resume <session_id>`.
+    pub fn open_session_in_wt(&mut self) {
+        if self.sessions.is_empty() {
+            return;
+        }
+        let session = &self.sessions[self.session_list_index];
+        let session_id = session.session_id.clone();
+
+        // Use the session's own project path if known, otherwise fall back to
+        // the project directory Associate was launched with.
+        let cwd = session
+            .project_path
+            .as_deref()
+            .unwrap_or_else(|| self.project_cwd.to_str().unwrap_or("."))
+            .to_string();
+
+        let result = Command::new("wt.exe")
+            .args([
+                "split-pane",
+                "-d",
+                &cwd,
+                "--",
+                "claude",
+                "--resume",
+                &session_id,
+            ])
+            .status();
+
+        match result {
+            Ok(s) if s.success() => {}
+            Ok(s) => {
+                self.last_error = Some(format!("wt.exe exited with {}", s));
+            }
+            Err(e) => {
+                self.last_error = Some(format!(
+                    "Failed to run wt.exe: {}. Is Windows Terminal installed?",
+                    e
+                ));
+            }
+        }
+    }
+
+    pub fn jump_to_process_session(&mut self) {
+        let sid = match self.selected_process().and_then(|p| p.session_id.as_deref()) {
+            Some(s) => s.to_string(),
+            None => {
+                self.last_error = Some("Process session not yet linked".to_string());
+                return;
+            }
+        };
+        match self.sessions.iter().position(|s| s.session_id == sid) {
+            Some(i) => {
+                self.session_list_index = i;
+                self.loaded_session_id = None;
+                self.load_selected_transcript();
+                self.sessions_pane = SessionsPane::Transcript;
+                self.active_tab = ActiveTab::Sessions;
+            }
+            None => {
+                let short = &sid[..8.min(sid.len())];
+                self.last_error = Some(format!("Session {} not in list yet", short));
+            }
+        }
+    }
+}
+
+/// Parse one line of `--output-format stream-json` output.
+///
+/// Returns `Some((progress_lines, session_id))` if the event produced displayable
+/// output, or `None` for events that should be silently skipped.
+fn parse_stream_json_event(line: &str) -> Option<(Vec<String>, Option<String>)> {
+    let v: serde_json::Value = serde_json::from_str(line).ok()?;
+    let event_type = v.get("type")?.as_str()?;
+
+    match event_type {
+        "system" => {
+            let subtype = v.get("subtype").and_then(|s| s.as_str()).unwrap_or("");
+            if subtype == "init" {
+                let sid = v
+                    .get("session_id")
+                    .and_then(|s| s.as_str())
+                    .map(|s| s.to_string());
+                let short = sid
+                    .as_deref()
+                    .map(|s| truncate_str(s, 8))
+                    .unwrap_or_default();
+                let line = format!("Session: {}", short);
+                return Some((vec![line], sid));
+            }
+            None
+        }
+
+        "assistant" => {
+            let content = v
+                .get("message")
+                .and_then(|m| m.get("content"))
+                .and_then(|c| c.as_array())?;
+
+            let mut lines = Vec::new();
+            for block in content {
+                let block_type = block.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                match block_type {
+                    "tool_use" => {
+                        let name = block
+                            .get("name")
+                            .and_then(|n| n.as_str())
+                            .unwrap_or("Tool");
+                        let summary =
+                            summarize_tool_input(name, block.get("input"));
+                        lines.push(format!("-> {}: {}", name, summary));
+                    }
+                    "text" => {
+                        if let Some(text) = block.get("text").and_then(|t| t.as_str()) {
+                            let first_line = text.lines().next().unwrap_or("").trim();
+                            if !first_line.is_empty() {
+                                lines.push(format!("  {}", truncate_str(first_line, 80)));
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if lines.is_empty() {
+                None
+            } else {
+                Some((lines, None))
+            }
+        }
+
+        "user" => None, // tool results are noisy
+
+        "result" => {
+            let subtype = v.get("subtype").and_then(|s| s.as_str()).unwrap_or("");
+            let sid = v
+                .get("session_id")
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string());
+
+            if subtype == "success" {
+                let cost = v
+                    .get("cost_usd")
+                    .and_then(|c| c.as_f64())
+                    .map(|c| format!(" (${:.4})", c))
+                    .unwrap_or_default();
+                let result_text = v
+                    .get("result")
+                    .and_then(|r| r.as_str())
+                    .map(|r| {
+                        let first = r.lines().next().unwrap_or("").trim();
+                        if first.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" — {}", truncate_str(first, 60))
+                        }
+                    })
+                    .unwrap_or_default();
+                let entry = format!("[SUCCESS{}]{}", cost, result_text);
+                Some((vec![entry], sid))
+            } else {
+                let entry = format!("[FAILED: {}]", subtype);
+                Some((vec![entry], sid))
+            }
+        }
+
+        _ => None,
+    }
+}
+
+/// Build a short summary string for a tool_use input value.
+fn summarize_tool_input(tool_name: &str, input: Option<&serde_json::Value>) -> String {
+    let input = match input {
+        Some(v) => v,
+        None => return String::new(),
+    };
+
+    match tool_name {
+        "Bash" => {
+            if let Some(cmd) = input.get("command").and_then(|v| v.as_str()) {
+                return truncate_str(cmd, 70);
+            }
+        }
+        "Read" | "Write" | "Edit" | "MultiEdit" => {
+            if let Some(fp) = input.get("file_path").and_then(|v| v.as_str()) {
+                return fp.to_string();
+            }
+        }
+        "Glob" => {
+            let pattern = input
+                .get("pattern")
+                .and_then(|v| v.as_str())
+                .unwrap_or("*");
+            let path = input
+                .get("path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if path.is_empty() {
+                return pattern.to_string();
+            }
+            return format!("{} in {}", pattern, path);
+        }
+        "Grep" => {
+            let pattern = input
+                .get("pattern")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let path = input
+                .get("path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if path.is_empty() {
+                return format!("\"{}\"", pattern);
+            }
+            return format!("\"{}\" in {}", pattern, path);
+        }
+        "Task" => {
+            if let Some(desc) = input
+                .get("description")
+                .or_else(|| input.get("prompt"))
+                .and_then(|v| v.as_str())
+            {
+                return truncate_str(desc, 70);
+            }
+        }
+        "TodoWrite" => {
+            if let Some(todos) = input.get("todos").and_then(|v| v.as_array()) {
+                let count = todos.len();
+                let first = todos
+                    .first()
+                    .and_then(|t| {
+                        t.get("content")
+                            .or_else(|| t.get("task"))
+                            .and_then(|v| v.as_str())
+                    })
+                    .unwrap_or("");
+                return format!("{} todo{}: {}", count, if count == 1 { "" } else { "s" }, truncate_str(first, 40));
+            }
+        }
+        _ => {}
+    }
+
+    // Fallback: first string field value
+    if let Some(obj) = input.as_object() {
+        for (_, val) in obj {
+            if let Some(s) = val.as_str() {
+                return truncate_str(s, 70);
+            }
+        }
+    }
+
+    String::new()
+}
+
+/// Truncate a string to `max` chars, appending "..." if truncated.
+fn truncate_str(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let truncated: String = s.chars().take(max.saturating_sub(3)).collect();
+        format!("{}...", truncated)
     }
 }

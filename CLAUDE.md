@@ -44,6 +44,16 @@ export PATH="/c/Users/Keith/.cargo/bin:$PATH:/c/msys64/mingw64/bin" && cargo bui
 
 Requires the `stable-x86_64-pc-windows-gnu` toolchain with MinGW via MSYS2. MSVC tools are not available.
 
+## After Implementing a Plan or Code Changes
+
+Always run a full release build when finished implementing a plan or any code changes:
+
+```bash
+./build.sh
+```
+
+This ensures the binary is up to date and catches any issues not caught by `cargo check`.
+
 ## Lint
 
 No custom rustfmt or clippy configuration — defaults apply.

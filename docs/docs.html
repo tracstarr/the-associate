@@ -601,6 +601,7 @@
         <a href="#tab-issues" class="sidebar-link sub">Issues</a>
         <a href="#tab-jira" class="sidebar-link sub">Jira</a>
         <a href="#tab-linear" class="sidebar-link sub">Linear</a>
+        <a href="#tab-processes" class="sidebar-link sub">Processes</a>
       </div>
       <div class="sidebar-section">
         <div class="sidebar-heading">Advanced</div>
@@ -928,12 +929,15 @@ tail_lines = 200             <span class="comment"># Lines to load from end of t
           <tr><td><kbd>Ctrl+S</kbd></td><td>Git (browser)</td><td>Save the file being edited</td></tr>
           <tr><td><kbd>Esc</kbd></td><td>Git (browser)</td><td>Cancel editing</td></tr>
           <tr><td><kbd>Backspace</kbd></td><td>Git (browser)</td><td>Collapse directory or navigate to parent</td></tr>
-          <tr><td><kbd>o</kbd></td><td>PRs / Issues / Jira</td><td>Open the selected item in your web browser</td></tr>
-          <tr><td><kbd>r</kbd></td><td>PRs / Issues / Jira</td><td>Refresh data from the remote service</td></tr>
+          <tr><td><kbd>p</kbd></td><td>PRs / Issues / Jira / Linear</td><td>Open the prompt modal to compose and launch a Claude Code task from the selected ticket</td></tr>
+          <tr><td><kbd>o</kbd></td><td>PRs / Issues / Jira / Linear</td><td>Open the selected item in your web browser</td></tr>
+          <tr><td><kbd>r</kbd></td><td>PRs / Issues / Jira / Linear</td><td>Refresh data from the remote service</td></tr>
           <tr><td><kbd>n</kbd></td><td>Issues</td><td>Create a new issue (opens editor popup)</td></tr>
           <tr><td><kbd>e</kbd></td><td>Issues</td><td>Edit the selected issue's title and body</td></tr>
           <tr><td><kbd>c</kbd></td><td>Issues</td><td>Add a comment to the selected issue</td></tr>
           <tr><td><kbd>x</kbd></td><td>Issues</td><td>Close or reopen the selected issue</td></tr>
+          <tr><td><kbd>x</kbd></td><td>Processes</td><td>Kill the selected running process</td></tr>
+          <tr><td><kbd>s</kbd></td><td>Processes</td><td>Jump to the Sessions tab and load the transcript for the selected process</td></tr>
           <tr><td><kbd>d</kbd> / <kbd>Del</kbd></td><td>Sessions / Teams / Todos / Plans</td><td>Delete the selected item (shows confirmation prompt)</td></tr>
           <tr><td><kbd>y</kbd></td><td>Sessions / Teams / Todos / Plans</td><td>Confirm deletion when the prompt is active</td></tr>
           <tr><td><kbd>n</kbd> / <kbd>Esc</kbd></td><td>Sessions / Teams / Todos / Plans</td><td>Cancel deletion prompt</td></tr>
@@ -947,7 +951,7 @@ tail_lines = 200             <span class="comment"># Lines to load from end of t
            ============================================================ -->
       <h2 id="tabs">Tabs Reference</h2>
 
-      <p>The Associate displays up to nine tabs. The first five are always visible; the PRs, Issues, Jira, and Linear tabs appear only when their respective tools are detected and configured.</p>
+      <p>The Associate displays up to ten tabs. The first five are always visible; the PRs, Issues, Jira, Linear, and Processes tabs appear only when their respective tools are detected, configured, or actively used.</p>
 
       <div class="callout callout-info">
         <p><strong>Pane pattern:</strong> Every tab uses a left/right pane layout. The left pane shows a list; the right pane shows detail for the selected item. Use <kbd>h</kbd>/<kbd>l</kbd> to switch between panes.</p>
@@ -1009,6 +1013,7 @@ tail_lines = 200             <span class="comment"># Lines to load from end of t
           <li>Review status is color-coded: approved (green), changes requested (red), pending review (yellow), draft (gray).</li>
           <li>A <strong>*</strong> badge appears on the tab name when new activity is detected.</li>
           <li>Data is polled every 60 seconds. Press <kbd>r</kbd> to refresh manually, <kbd>o</kbd> to open in your browser.</li>
+          <li>Press <kbd>p</kbd> to open the prompt modal and launch a Claude Code task based on the selected PR.</li>
         </ul>
         <div class="callout callout-info">
           <p>The repository is auto-detected from the git remote. Override it in <code>.assoc.toml</code> with <code>github.repo = "owner/name"</code>.</p>
@@ -1023,6 +1028,7 @@ tail_lines = 200             <span class="comment"># Lines to load from end of t
           <li>The right pane shows full issue details: state, author, assignees, labels, milestone, description, comments, and URL.</li>
           <li>Press <kbd>n</kbd> to create a new issue, <kbd>e</kbd> to edit the selected issue, <kbd>c</kbd> to add a comment, <kbd>x</kbd> to close or reopen.</li>
           <li>Press <kbd>o</kbd> to open the issue in your browser, <kbd>r</kbd> to refresh manually.</li>
+          <li>Press <kbd>p</kbd> to open the prompt modal — a pre-filled editable prompt based on the issue title and description. Confirm with <kbd>Ctrl+Enter</kbd> to spawn a headless Claude Code process that works the issue autonomously. The dashboard switches to the Processes tab automatically.</li>
           <li>Data is polled every 60 seconds automatically.</li>
         </ul>
         <div class="callout callout-info">
@@ -1039,6 +1045,7 @@ tail_lines = 200             <span class="comment"># Lines to load from end of t
           <li>Press <kbd>t</kbd> to show available status transitions, then press a number key to execute a transition.</li>
           <li>Press <kbd>/</kbd> to search issues by text query. Press <kbd>Esc</kbd> to cancel search and return to the default view.</li>
           <li>Data is polled every 60 seconds. Press <kbd>r</kbd> to refresh manually, <kbd>o</kbd> to open in your browser.</li>
+          <li>Press <kbd>p</kbd> to open the prompt modal and launch a Claude Code task from the selected Jira issue.</li>
         </ul>
       </div>
 
@@ -1050,9 +1057,25 @@ tail_lines = 200             <span class="comment"># Lines to load from end of t
           <li>The right pane shows full issue details: identifier, title, state, priority, assignee, team, labels, description, and URL.</li>
           <li>Press <kbd>Enter</kbd> or <kbd>o</kbd> to open the selected issue in your browser.</li>
           <li>Press <kbd>r</kbd> to refresh data from the Linear API. Data is polled every 60 seconds automatically.</li>
+          <li>Press <kbd>p</kbd> to open the prompt modal and launch a Claude Code task from the selected Linear issue.</li>
         </ul>
         <div class="callout callout-info">
           <p>Configure <code>linear.username</code> with your Linear account email so that issues assigned to you are separated into the <strong>My Tasks</strong> section. Without it, only the <strong>Unassigned</strong> section is shown.</p>
+        </div>
+      </div>
+
+      <div class="tab-card" id="tab-processes">
+        <h3 class="tab-card-title">10. Processes</h3>
+        <p>Tracks every headless Claude Code process spawned via the prompt modal (<kbd>p</kbd> on PRs, Issues, Jira, or Linear). The tab appears automatically when a process is launched and stays visible for the session.</p>
+        <ul>
+          <li>The left pane lists all spawned processes with a status icon: <strong>*</strong> running, <strong>+</strong> completed, <strong>x</strong> failed.</li>
+          <li>The right pane shows a parsed, color-coded progress view: session link (magenta), tool calls (yellow), text snippets (white), and a final <strong>[SUCCESS ($cost)]</strong> or <strong>[FAILED]</strong> line.</li>
+          <li>The output block title shows a short session ID suffix (<code>[sid:xxxxxxxx]</code>) once Claude Code emits the stream-json init event.</li>
+          <li>Press <kbd>x</kbd> to kill the selected running process immediately.</li>
+          <li>Press <kbd>s</kbd> to jump to the Sessions tab and load the full transcript for the selected process. If the session has not yet been linked, the status bar shows a message. This works once Claude Code has emitted its first stream-json event.</li>
+        </ul>
+        <div class="callout callout-info">
+          <p>Processes run with <code>--dangerously-skip-permissions</code> so they can operate fully autonomously. Review the generated prompt in the modal before confirming with <kbd>Ctrl+Enter</kbd>.</p>
         </div>
       </div>
 

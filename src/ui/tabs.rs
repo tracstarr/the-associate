@@ -28,6 +28,18 @@ pub fn draw_tab_bar(f: &mut Frame, area: Rect, app: &App) {
             ActiveTab::GitHubIssues => format!("{}:Issues", num),
             ActiveTab::Jira => format!("{}:Jira", num),
             ActiveTab::Linear => format!("{}:Linear", num),
+            ActiveTab::Processes => {
+                let running = app
+                    .processes
+                    .iter()
+                    .filter(|p| p.status == crate::model::process::ProcessStatus::Running)
+                    .count();
+                if running > 0 {
+                    format!("{}:Procs({})", num, running)
+                } else {
+                    format!("{}:Procs", num)
+                }
+            }
         };
 
         let style = if *tab == app.active_tab {

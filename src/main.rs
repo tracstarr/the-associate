@@ -102,6 +102,7 @@ TUI KEYBINDINGS:
   Enter              Select item / open content pane
   g / G              Jump to top / bottom
   f                  Toggle follow mode (Sessions tab)
+  o                  Open session in new WT pane (Sessions tab)
   s                  Cycle subagent transcripts (Sessions tab)
   b                  Toggle file browser (Git tab)
   e                  Edit file (file browser, Content pane)
@@ -109,7 +110,8 @@ TUI KEYBINDINGS:
   n                  New issue (Issues tab)
   e                  Edit issue (Issues tab) / file (browser)
   c                  Comment on issue (Issues tab)
-  x                  Close/reopen issue (Issues tab)
+  p                  Launch Claude Code prompt (PRs / Issues / Linear / Jira)
+  x                  Close/reopen issue (Issues tab) / Kill process (Processes tab)
   d / Del            Delete file (Sessions / Teams / Todos / Plans)
   o                  Open in browser (PRs / Issues / Jira / Linear)
   r                  Refresh data (PRs / Issues / Jira / Linear)
@@ -319,6 +321,9 @@ fn run_app(
             if app.has_linear && app.linear_last_poll.elapsed() >= poll_interval {
                 app.load_linear_issues();
             }
+
+            // Poll spawned process output
+            app.poll_process_output();
         }
 
         if app.should_quit {
@@ -363,6 +368,12 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => app.cancel_delete(),
             _ => {}
         }
+        return;
+    }
+
+    // Prompt modal — pass keys to prompt editor
+    if app.show_prompt_modal {
+        handle_prompt_modal_key(app, key);
         return;
     }
 
@@ -456,12 +467,14 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             }
         }
 
-        // Subagent transcript cycling (Sessions tab)
+        // Subagent transcript cycling (Sessions tab) / Jump to session (Processes tab)
         KeyCode::Char('s') => {
             if app.active_tab == app::ActiveTab::Sessions
                 && app.sessions_pane == app::SessionsPane::Transcript
             {
                 app.cycle_subagent();
+            } else if app.active_tab == app::ActiveTab::Processes {
+                app.jump_to_process_session();
             }
         }
 
@@ -504,19 +517,31 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             }
         }
 
-        // Close/reopen issue (Issues tab)
-        KeyCode::Char('x') => {
-            if app.active_tab == app::ActiveTab::GitHubIssues {
-                app.issues_toggle_state();
+        // Launch Claude Code prompt modal (all issue tabs)
+        KeyCode::Char('p') => match app.active_tab {
+            app::ActiveTab::GitHubPRs
+            | app::ActiveTab::GitHubIssues
+            | app::ActiveTab::Linear
+            | app::ActiveTab::Jira => {
+                app.open_prompt_modal_for_current();
             }
-        }
+            _ => {}
+        },
 
-        // Open in browser
+        // Close/reopen issue (Issues tab) / Kill process (Processes tab)
+        KeyCode::Char('x') => match app.active_tab {
+            app::ActiveTab::GitHubIssues => app.issues_toggle_state(),
+            app::ActiveTab::Processes => app.kill_selected_process(),
+            _ => {}
+        },
+
+        // Open in browser / open session in WT pane
         KeyCode::Char('o') => match app.active_tab {
             app::ActiveTab::GitHubPRs => app.gh_open_selected(),
             app::ActiveTab::GitHubIssues => app.issues_open_in_browser(),
             app::ActiveTab::Jira => app.jira_open_selected(),
             app::ActiveTab::Linear => app.linear_open_selected(),
+            app::ActiveTab::Sessions => app.open_session_in_wt(),
             _ => {}
         },
 
@@ -585,6 +610,25 @@ fn handle_issues_edit_key(app: &mut App, key: KeyEvent) {
                         editor.input(key);
                     }
                 }
+            }
+        }
+    }
+}
+
+fn handle_prompt_modal_key(app: &mut App, key: KeyEvent) {
+    match key.code {
+        // Ctrl+Enter to confirm and launch
+        KeyCode::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.confirm_prompt_modal();
+        }
+        // Esc to cancel
+        KeyCode::Esc => {
+            app.cancel_prompt_modal();
+        }
+        // All other keys go to the TextArea editor
+        _ => {
+            if let Some(ref mut editor) = app.prompt_editor {
+                editor.input(key);
             }
         }
     }

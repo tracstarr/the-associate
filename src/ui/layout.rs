@@ -5,8 +5,8 @@ use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui::Frame;
 
 use super::{
-    git_view, github_view, help_overlay, issues_view, jira_view, linear_view, plans_view, sessions_view, tabs,
-    teams_view, theme, todos_view,
+    git_view, github_view, help_overlay, issues_view, jira_view, linear_view, plans_view,
+    processes_view, prompt_modal, sessions_view, tabs, teams_view, theme, todos_view,
 };
 use crate::app::{ActiveTab, App, GitMode, SessionsPane};
 
@@ -37,6 +37,11 @@ pub fn draw_layout(f: &mut Frame, app: &App) {
     // Help overlay (on top of everything)
     if app.show_help {
         help_overlay::draw_help(f, f.area());
+    }
+
+    // Prompt modal (on top of everything)
+    if app.show_prompt_modal {
+        prompt_modal::draw_prompt_modal(f, f.area(), app);
     }
 }
 
@@ -113,13 +118,19 @@ fn draw_content(f: &mut Frame, area: Rect, app: &App) {
         ActiveTab::GitHubIssues => issues_view::draw_issues(f, area, app),
         ActiveTab::Jira => jira_view::draw_jira(f, area, app),
         ActiveTab::Linear => linear_view::draw_linear(f, area, app),
+        ActiveTab::Processes => processes_view::draw_processes(f, area, app),
     }
 }
 
 fn hint_text(app: &App) -> Vec<(&'static str, &'static str)> {
     let mut hints: Vec<(&str, &str)> = match app.active_tab {
         ActiveTab::Sessions => match app.sessions_pane {
-            SessionsPane::List => vec![("j/k", "nav"), ("Enter", "select"), ("d", "delete")],
+            SessionsPane::List => vec![
+                ("j/k", "nav"),
+                ("Enter", "select"),
+                ("o", "open in WT"),
+                ("d", "delete"),
+            ],
             SessionsPane::Transcript => vec![("f", "follow"), ("s", "subagent"), ("j/k", "scroll")],
         },
         ActiveTab::Teams => vec![
@@ -142,7 +153,12 @@ fn hint_text(app: &App) -> Vec<(&'static str, &'static str)> {
             }
         }
         ActiveTab::Plans => vec![("j/k", "nav"), ("h/l", "panes"), ("d", "delete")],
-        ActiveTab::GitHubPRs => vec![("j/k", "nav"), ("o", "open"), ("r", "refresh")],
+        ActiveTab::GitHubPRs => vec![
+            ("j/k", "nav"),
+            ("o", "open"),
+            ("r", "refresh"),
+            ("p", "prompt"),
+        ],
         ActiveTab::GitHubIssues => vec![
             ("j/k", "nav"),
             ("n", "new"),
@@ -151,6 +167,7 @@ fn hint_text(app: &App) -> Vec<(&'static str, &'static str)> {
             ("x", "close/open"),
             ("o", "browser"),
             ("r", "refresh"),
+            ("p", "prompt"),
         ],
         ActiveTab::Jira => vec![
             ("j/k", "nav"),
@@ -158,8 +175,15 @@ fn hint_text(app: &App) -> Vec<(&'static str, &'static str)> {
             ("r", "refresh"),
             ("/", "search"),
             ("t", "transition"),
+            ("p", "prompt"),
         ],
-        ActiveTab::Linear => vec![("j/k", "nav"), ("o", "open"), ("r", "refresh")],
+        ActiveTab::Linear => vec![
+            ("j/k", "nav"),
+            ("o", "open"),
+            ("r", "refresh"),
+            ("p", "prompt"),
+        ],
+        ActiveTab::Processes => vec![("j/k", "nav"), ("h/l", "panes"), ("x", "kill"), ("s", "jump to session")],
     };
     hints.push(("^H", "help"));
     hints
