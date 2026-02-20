@@ -276,6 +276,11 @@ pub struct App {
     pub send_status: Option<(String, Instant)>,
     pub event_tx: Option<mpsc::Sender<AppEvent>>,
 
+    // Current issue detection
+    /// Issue identifiers extracted from the current branch or directory name.
+    /// Used to highlight and pin the "current" issue to the top of issue lists.
+    pub current_issue_ids: Vec<String>,
+
     // Status
     pub last_update: Instant,
     pub last_error: Option<String>,
@@ -292,8 +297,7 @@ impl App {
             project_config.tabs.github_prs() || project_config.tabs.github_issues();
         let has_gh = gh_tabs_wanted && cli_detect::is_available("gh");
         let has_jira = project_config.tabs.jira() && cli_detect::is_available("acli");
-        let has_linear =
-            project_config.tabs.linear() && project_config.linear_api_key().is_some();
+        let has_linear = project_config.tabs.linear() && project_config.linear_api_key().is_some();
         let has_claude = cli_detect::is_available("claude");
         // Config github.repo overrides git remote detection
         let gh_repo = project_config.github_repo().map(String::from).or_else(|| {
@@ -317,9 +321,8 @@ impl App {
 
         // Show Issues tab if gh is available, repo is known, and config doesn't disable it.
         // We don't pre-check hasIssuesEnabled — if issues can't be fetched, the tab shows an error.
-        let gh_issues_enabled = has_gh
-            && gh_issues_repo.is_some()
-            && project_config.github_issues_enabled();
+        let gh_issues_enabled =
+            has_gh && gh_issues_repo.is_some() && project_config.github_issues_enabled();
 
         let tail_lines = project_config.tail_lines();
 
@@ -457,9 +460,14 @@ impl App {
             prompt_editor: None,
             prompt_ticket_info: None,
 
+            current_issue_ids: Vec::new(),
+
             last_update: Instant::now(),
             last_error: None,
         };
+
+        // Detect current issue from branch name or directory name
+        app.detect_current_issue();
 
         // Default to the first enabled tab
         let visible = app.visible_tabs();
@@ -468,6 +476,45 @@ impl App {
         }
 
         app
+    }
+
+    /// Detect the current issue from the git branch name or directory name.
+    fn detect_current_issue(&mut self) {
+        // Try branch name first
+        let mut source = cli_detect::detect_git_branch(&self.project_cwd);
+
+        // Fall back to directory name (last component)
+        if source.is_none() {
+            source = self
+                .project_cwd
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|s| s.to_string());
+        }
+
+        if let Some(ref name) = source {
+            self.current_issue_ids = cli_detect::extract_issue_ids(name);
+        }
+    }
+
+    /// Check if a GitHub issue number matches the current issue.
+    pub fn is_current_github_issue(&self, number: u64) -> bool {
+        let num_str = format!("#{}", number);
+        self.current_issue_ids.contains(&num_str)
+    }
+
+    /// Check if a Jira issue key matches the current issue.
+    pub fn is_current_jira_issue(&self, key: &str) -> bool {
+        self.current_issue_ids
+            .iter()
+            .any(|id| id.eq_ignore_ascii_case(key))
+    }
+
+    /// Check if a Linear issue identifier matches the current issue.
+    pub fn is_current_linear_issue(&self, identifier: &str) -> bool {
+        self.current_issue_ids
+            .iter()
+            .any(|id| id.eq_ignore_ascii_case(identifier))
     }
 
     /// Check whether a tab is enabled via the `[tabs]` config section.
@@ -2170,7 +2217,9 @@ impl App {
             let state = self.project_config.github_issues_state().to_string();
             match github::list_issues(repo, &state) {
                 Ok(issues) => {
-                    self.gh_issues_flat_list = github::categorize_issues(&issues, user);
+                    let mut flat = github::categorize_issues(&issues, user);
+                    self.pin_current_github_issue(&mut flat);
+                    self.gh_issues_flat_list = flat;
                     self.gh_issues = issues;
                     if self.gh_issues_index >= self.gh_issues_flat_list.len() {
                         self.gh_issues_index = 0;
@@ -2182,6 +2231,26 @@ impl App {
                     self.last_error = Some(format!("Issues: {}", e));
                 }
             }
+        }
+    }
+
+    /// If any GitHub issue matches current_issue_ids, move it to the top
+    /// under a "Current Issue" header.
+    fn pin_current_github_issue(&self, flat: &mut Vec<FlatIssueItem>) {
+        if self.current_issue_ids.is_empty() {
+            return;
+        }
+        // Find the first matching issue
+        let pos = flat.iter().position(|item| {
+            matches!(item, FlatIssueItem::Issue(issue) if self.is_current_github_issue(issue.number))
+        });
+        if let Some(idx) = pos {
+            let item = flat.remove(idx);
+            flat.insert(
+                0,
+                FlatIssueItem::SectionHeader(">>> Current Issue <<<".to_string()),
+            );
+            flat.insert(1, item);
         }
     }
 
@@ -2377,7 +2446,9 @@ impl App {
             self.project_config.jira_jql(),
         ) {
             Ok(issues) => {
-                self.jira_flat_list = jira::categorize_issues(&issues);
+                let mut flat = jira::categorize_issues(&issues);
+                self.pin_current_jira_issue(&mut flat);
+                self.jira_flat_list = flat;
                 self.jira_issues = issues;
                 if self.jira_index >= self.jira_flat_list.len() {
                     self.jira_index = 0;
@@ -2399,7 +2470,9 @@ impl App {
         self.jira_search_mode = false;
         match jira::search_issues(&query) {
             Ok(issues) => {
-                self.jira_flat_list = jira::categorize_issues(&issues);
+                let mut flat = jira::categorize_issues(&issues);
+                self.pin_current_jira_issue(&mut flat);
+                self.jira_flat_list = flat;
                 self.jira_issues = issues;
                 self.jira_index = 0;
                 self.jira_skip_to_issue_entry();
@@ -2495,6 +2568,28 @@ impl App {
         }
     }
 
+    /// If any Jira issue matches current_issue_ids, move it to the top
+    /// under a "Current Issue" header.
+    fn pin_current_jira_issue(&self, flat: &mut Vec<FlatJiraItem>) {
+        if self.current_issue_ids.is_empty() {
+            return;
+        }
+        let pos = flat.iter().position(|item| {
+            matches!(item, FlatJiraItem::Issue(issue) if self.is_current_jira_issue(&issue.key))
+        });
+        if let Some(idx) = pos {
+            let item = flat.remove(idx);
+            flat.insert(
+                0,
+                FlatJiraItem::StatusHeader(
+                    ">>> Current Issue <<<".to_string(),
+                    "In Progress".to_string(),
+                ),
+            );
+            flat.insert(1, item);
+        }
+    }
+
     pub fn jira_selected_issue(&self) -> Option<&JiraIssue> {
         if self.jira_flat_list.is_empty() {
             return None;
@@ -2530,7 +2625,9 @@ impl App {
         self.linear_last_poll = Instant::now();
         match linear::fetch_my_issues(&api_key, username.as_deref(), team.as_deref()) {
             Ok(issues) => {
-                self.linear_flat_list = linear::categorize_issues(&issues, username.as_deref());
+                let mut flat = linear::categorize_issues(&issues, username.as_deref());
+                self.pin_current_linear_issue(&mut flat);
+                self.linear_flat_list = flat;
                 self.linear_issues = issues;
                 if self.linear_index >= self.linear_flat_list.len() {
                     self.linear_index = 0;
@@ -2698,6 +2795,25 @@ impl App {
         }
     }
 
+    /// If any Linear issue matches current_issue_ids, move it to the top
+    /// under a "Current Issue" header.
+    fn pin_current_linear_issue(&self, flat: &mut Vec<FlatLinearItem>) {
+        if self.current_issue_ids.is_empty() {
+            return;
+        }
+        let pos = flat.iter().position(|item| {
+            matches!(item, FlatLinearItem::Issue(issue) if self.is_current_linear_issue(&issue.identifier))
+        });
+        if let Some(idx) = pos {
+            let item = flat.remove(idx);
+            flat.insert(
+                0,
+                FlatLinearItem::AssignmentHeader(">>> Current Issue <<<".to_string()),
+            );
+            flat.insert(1, item);
+        }
+    }
+
     pub fn linear_selected_issue(&self) -> Option<&LinearIssue> {
         if self.linear_flat_list.is_empty() {
             return None;
@@ -2805,7 +2921,11 @@ impl App {
             return;
         }
 
-        if let Some(pos) = self.process_children.iter_mut().position(|(pid, _)| *pid == id) {
+        if let Some(pos) = self
+            .process_children
+            .iter_mut()
+            .position(|(pid, _)| *pid == id)
+        {
             let _ = self.process_children[pos].1.kill();
             self.process_children.remove(pos);
         }
@@ -2857,7 +2977,10 @@ impl App {
     }
 
     pub fn jump_to_process_session(&mut self) {
-        let sid = match self.selected_process().and_then(|p| p.session_id.as_deref()) {
+        let sid = match self
+            .selected_process()
+            .and_then(|p| p.session_id.as_deref())
+        {
             Some(s) => s.to_string(),
             None => {
                 self.last_error = Some("Process session not yet linked".to_string());
@@ -2917,12 +3040,8 @@ fn parse_stream_json_event(line: &str) -> Option<(Vec<String>, Option<String>)> 
                 let block_type = block.get("type").and_then(|t| t.as_str()).unwrap_or("");
                 match block_type {
                     "tool_use" => {
-                        let name = block
-                            .get("name")
-                            .and_then(|n| n.as_str())
-                            .unwrap_or("Tool");
-                        let summary =
-                            summarize_tool_input(name, block.get("input"));
+                        let name = block.get("name").and_then(|n| n.as_str()).unwrap_or("Tool");
+                        let summary = summarize_tool_input(name, block.get("input"));
                         lines.push(format!("-> {}: {}", name, summary));
                     }
                     "text" => {
@@ -3001,28 +3120,16 @@ fn summarize_tool_input(tool_name: &str, input: Option<&serde_json::Value>) -> S
             }
         }
         "Glob" => {
-            let pattern = input
-                .get("pattern")
-                .and_then(|v| v.as_str())
-                .unwrap_or("*");
-            let path = input
-                .get("path")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let pattern = input.get("pattern").and_then(|v| v.as_str()).unwrap_or("*");
+            let path = input.get("path").and_then(|v| v.as_str()).unwrap_or("");
             if path.is_empty() {
                 return pattern.to_string();
             }
             return format!("{} in {}", pattern, path);
         }
         "Grep" => {
-            let pattern = input
-                .get("pattern")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let path = input
-                .get("path")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let pattern = input.get("pattern").and_then(|v| v.as_str()).unwrap_or("");
+            let path = input.get("path").and_then(|v| v.as_str()).unwrap_or("");
             if path.is_empty() {
                 return format!("\"{}\"", pattern);
             }
@@ -3048,7 +3155,12 @@ fn summarize_tool_input(tool_name: &str, input: Option<&serde_json::Value>) -> S
                             .and_then(|v| v.as_str())
                     })
                     .unwrap_or("");
-                return format!("{} todo{}: {}", count, if count == 1 { "" } else { "s" }, truncate_str(first, 40));
+                return format!(
+                    "{} todo{}: {}",
+                    count,
+                    if count == 1 { "" } else { "s" },
+                    truncate_str(first, 40)
+                );
             }
         }
         _ => {}
@@ -3081,9 +3193,8 @@ impl App {
 
     pub fn start_send_mode(&mut self) {
         if !self.two_pane {
-            self.last_error = Some(
-                "Pane send requires exactly 2 WT panes (use 'assoc launch')".to_string(),
-            );
+            self.last_error =
+                Some("Pane send requires exactly 2 WT panes (use 'assoc launch')".to_string());
             return;
         }
         self.send_mode = true;

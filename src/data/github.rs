@@ -145,7 +145,11 @@ fn wait_with_output(child: &mut std::process::Child) -> Result<std::process::Out
     let stdout = stdout_thread.join().unwrap_or_default();
     let stderr = stderr_thread.join().unwrap_or_default();
 
-    Ok(std::process::Output { status, stdout, stderr })
+    Ok(std::process::Output {
+        status,
+        stdout,
+        stderr,
+    })
 }
 
 /// Check whether the repo has issues enabled by querying the repo metadata.

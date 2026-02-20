@@ -217,7 +217,12 @@ fn hint_text(app: &App) -> Vec<(&'static str, &'static str)> {
             ("r", "refresh"),
             ("p", "prompt"),
         ],
-        ActiveTab::Processes => vec![("j/k", "nav"), ("h/l", "panes"), ("x", "kill"), ("s", "jump to session")],
+        ActiveTab::Processes => vec![
+            ("j/k", "nav"),
+            ("h/l", "panes"),
+            ("x", "kill"),
+            ("s", "jump to session"),
+        ],
     };
     hints.push(("i", "send"));
     hints.push(("^H", "help"));

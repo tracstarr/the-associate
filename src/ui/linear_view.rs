@@ -44,27 +44,39 @@ fn draw_issue_list(f: &mut Frame, area: Rect, app: &App) {
             .iter()
             .map(|item| match item {
                 FlatLinearItem::AssignmentHeader(name) => {
-                    ListItem::new(Line::from(Span::styled(
-                        name.clone(),
-                        theme::LINEAR_SECTION,
-                    )))
+                    let style = if name.contains("Current Issue") {
+                        theme::CURRENT_ISSUE_HEADER
+                    } else {
+                        theme::LINEAR_SECTION
+                    };
+                    ListItem::new(Line::from(Span::styled(name.clone(), style)))
                 }
                 FlatLinearItem::Issue(issue) => {
-                    let priority_style = match issue.priority {
-                        1 => theme::LINEAR_URGENT,
-                        2 => theme::LINEAR_HIGH,
-                        3 => theme::LINEAR_MEDIUM,
-                        4 => theme::LINEAR_LOW,
-                        _ => theme::LIST_NORMAL,
+                    let is_current = app.is_current_linear_issue(&issue.identifier);
+
+                    let priority_style = if is_current {
+                        theme::CURRENT_ISSUE
+                    } else {
+                        match issue.priority {
+                            1 => theme::LINEAR_URGENT,
+                            2 => theme::LINEAR_HIGH,
+                            3 => theme::LINEAR_MEDIUM,
+                            4 => theme::LINEAR_LOW,
+                            _ => theme::LIST_NORMAL,
+                        }
                     };
+
+                    let text_style = if is_current {
+                        theme::CURRENT_ISSUE
+                    } else {
+                        theme::LIST_NORMAL
+                    };
+
                     let line = Line::from(vec![
                         Span::styled(format!("  {} ", issue.priority_icon()), priority_style),
-                        Span::styled(
-                            &issue.identifier,
-                            theme::LIST_NORMAL.add_modifier(Modifier::BOLD),
-                        ),
-                        Span::raw(" "),
-                        Span::raw(&issue.title),
+                        Span::styled(&issue.identifier, text_style.add_modifier(Modifier::BOLD)),
+                        Span::styled(" ", text_style),
+                        Span::styled(&issue.title, text_style),
                     ]);
                     ListItem::new(line)
                 }

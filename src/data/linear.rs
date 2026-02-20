@@ -78,9 +78,7 @@ fn build_query(username: Option<&str>, team_key: Option<&str>) -> String {
     let mut filters = Vec::new();
 
     // Exclude completed and cancelled issues
-    filters.push(
-        "state: { type: { nin: [\"completed\", \"cancelled\"] } }".to_string(),
-    );
+    filters.push("state: { type: { nin: [\"completed\", \"cancelled\"] } }".to_string());
 
     if let Some(team) = team_key {
         filters.push(format!("team: {{ key: {{ eq: \"{}\" }} }}", team));
@@ -158,9 +156,10 @@ pub fn categorize_issues(issues: &[LinearIssue], username: Option<&str>) -> Vec<
             None => unassigned.push(issue),
             Some(assignee) => {
                 let is_mine = username.map_or(false, |user| {
-                    assignee.email.as_deref().map_or(false, |e| {
-                        e.to_lowercase() == user.to_lowercase()
-                    })
+                    assignee
+                        .email
+                        .as_deref()
+                        .map_or(false, |e| e.to_lowercase() == user.to_lowercase())
                 });
                 if is_mine {
                     my_tasks.push(issue);

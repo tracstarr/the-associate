@@ -59,25 +59,42 @@ fn draw_issue_list(f: &mut Frame, area: Rect, app: &App) {
             .iter()
             .map(|item| match item {
                 FlatJiraItem::StatusHeader(name, category) => {
-                    let style = match category.as_str() {
-                        "In Progress" => theme::JIRA_IN_PROGRESS,
-                        "Done" => theme::JIRA_DONE,
-                        _ => theme::JIRA_TODO,
+                    let style = if name.contains("Current Issue") {
+                        theme::CURRENT_ISSUE_HEADER
+                    } else {
+                        match category.as_str() {
+                            "In Progress" => theme::JIRA_IN_PROGRESS,
+                            "Done" => theme::JIRA_DONE,
+                            _ => theme::JIRA_TODO,
+                        }
                     };
                     ListItem::new(Line::from(Span::styled(name.clone(), style)))
                 }
                 FlatJiraItem::Issue(issue) => {
-                    let type_style = match issue.issue_type.to_lowercase().as_str() {
-                        "bug" => theme::JIRA_BUG,
-                        "story" => theme::JIRA_STORY,
-                        "task" => theme::JIRA_TASK,
-                        _ => theme::LIST_NORMAL,
+                    let is_current = app.is_current_jira_issue(&issue.key);
+
+                    let type_style = if is_current {
+                        theme::CURRENT_ISSUE
+                    } else {
+                        match issue.issue_type.to_lowercase().as_str() {
+                            "bug" => theme::JIRA_BUG,
+                            "story" => theme::JIRA_STORY,
+                            "task" => theme::JIRA_TASK,
+                            _ => theme::LIST_NORMAL,
+                        }
                     };
+
+                    let text_style = if is_current {
+                        theme::CURRENT_ISSUE
+                    } else {
+                        theme::LIST_NORMAL
+                    };
+
                     let line = Line::from(vec![
                         Span::styled(format!("  [{}] ", issue.type_icon()), type_style),
-                        Span::styled(&issue.key, theme::LIST_NORMAL.add_modifier(Modifier::BOLD)),
-                        Span::raw(" "),
-                        Span::raw(&issue.summary),
+                        Span::styled(&issue.key, text_style.add_modifier(Modifier::BOLD)),
+                        Span::styled(" ", text_style),
+                        Span::styled(&issue.summary, text_style),
                     ]);
                     ListItem::new(line)
                 }
