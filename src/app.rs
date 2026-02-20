@@ -1144,7 +1144,7 @@ impl App {
             }
             ActiveTab::Linear => {
                 if self.linear_pane == LinearPane::List {
-                    self.linear_pane = LinearPane::Detail;
+                    self.linear_open_selected();
                 }
             }
             _ => {}
@@ -1406,7 +1406,7 @@ impl App {
                         while self.linear_index > 0
                             && matches!(
                                 self.linear_flat_list[self.linear_index],
-                                FlatLinearItem::StateHeader(_, _)
+                                FlatLinearItem::AssignmentHeader(_)
                             )
                         {
                             self.linear_index -= 1;
@@ -2159,7 +2159,7 @@ impl App {
 
         match linear::fetch_my_issues(&api_key, username.as_deref(), team.as_deref()) {
             Ok(issues) => {
-                self.linear_flat_list = linear::categorize_issues(&issues);
+                self.linear_flat_list = linear::categorize_issues(&issues, username.as_deref());
                 self.linear_issues = issues;
                 if self.linear_index >= self.linear_flat_list.len() {
                     self.linear_index = 0;
@@ -2205,7 +2205,7 @@ impl App {
         let idx = self.linear_index.min(self.linear_flat_list.len() - 1);
         if matches!(
             self.linear_flat_list[idx],
-            FlatLinearItem::StateHeader(_, _)
+            FlatLinearItem::AssignmentHeader(_)
         ) {
             for i in (idx + 1)..self.linear_flat_list.len() {
                 if matches!(self.linear_flat_list[i], FlatLinearItem::Issue(_)) {
