@@ -4,6 +4,7 @@ pub mod git;
 pub mod github;
 pub mod inboxes;
 pub mod jira;
+pub mod linear;
 pub mod path_encoding;
 pub mod plans;
 pub mod sessions;

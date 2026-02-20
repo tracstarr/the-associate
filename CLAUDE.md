@@ -2,7 +2,41 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Build
+## Build and Test via Docker (preferred)
+
+All builds and tests must be run inside the Docker container. The container cross-compiles from Linux for Windows (`x86_64-pc-windows-gnu`). Cargo/Rust is not installed on the host machine.
+
+```bash
+# Full release build — copies assoc.exe to target/x86_64-pc-windows-gnu/release/ locally
+./build.sh
+
+# Or manually: build image then export binary via BuildKit
+docker build -t assoc-build --target builder .
+DOCKER_BUILDKIT=1 docker build --target export \
+    --output "type=local,dest=target/x86_64-pc-windows-gnu/release" .
+
+# Run cargo check (fast compile check, no binary output)
+docker run --rm -v "C:/dev/associate:/app" -w //app assoc-build cargo check --target x86_64-pc-windows-gnu
+
+# Run tests
+docker run --rm -v "C:/dev/associate:/app" -w //app assoc-build cargo test --target x86_64-pc-windows-gnu
+
+# Run clippy lint
+docker run --rm -v "C:/dev/associate:/app" -w //app assoc-build cargo clippy --target x86_64-pc-windows-gnu
+
+# Run rustfmt check
+docker run --rm -v "C:/dev/associate:/app" -w //app assoc-build cargo fmt -- --check
+```
+
+**Do not attempt to run cargo directly on the host.** Use Docker for all Rust commands.
+
+The Dockerfile uses two stages:
+- `builder` — compiles the project; used as the base for `cargo check/test/clippy`
+- `export` — a scratch stage containing only `assoc.exe`; used with `--output` to copy the binary locally
+
+Release profile uses `strip = true`, `lto = true`, `opt-level = "z"` (size-optimized).
+
+## Build (legacy — host only, requires local toolchain)
 
 ```bash
 export PATH="/c/Users/Keith/.cargo/bin:$PATH:/c/msys64/mingw64/bin" && cargo build --release
@@ -10,27 +44,7 @@ export PATH="/c/Users/Keith/.cargo/bin:$PATH:/c/msys64/mingw64/bin" && cargo bui
 
 Requires the `stable-x86_64-pc-windows-gnu` toolchain with MinGW via MSYS2. MSVC tools are not available.
 
-Release profile uses `strip = true`, `lto = true`, `opt-level = "z"` (size-optimized).
-
-## Test
-
-```bash
-cargo test
-```
-
-Run a single test:
-```bash
-cargo test test_simple_path
-```
-
-Only `src/data/path_encoding.rs` has tests currently.
-
 ## Lint
-
-```bash
-cargo clippy
-cargo fmt -- --check
-```
 
 No custom rustfmt or clippy configuration — defaults apply.
 

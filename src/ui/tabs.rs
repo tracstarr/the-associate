@@ -27,6 +27,7 @@ pub fn draw_tab_bar(f: &mut Frame, area: Rect, app: &App) {
             }
             ActiveTab::GitHubIssues => format!("{}:Issues", num),
             ActiveTab::Jira => format!("{}:Jira", num),
+            ActiveTab::Linear => format!("{}:Linear", num),
         };
 
         let style = if *tab == app.active_tab {
