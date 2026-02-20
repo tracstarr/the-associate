@@ -269,6 +269,7 @@ pub struct App {
     pub prompt_ticket_info: Option<TicketInfo>,
 
     // Pane send
+    pub two_pane: bool,
     pub send_mode: bool,
     pub send_input: String,
     pub send_pending: bool,
@@ -385,6 +386,7 @@ impl App {
             fb_editing: false,
             fb_editor: None,
 
+            two_pane: false,
             send_mode: false,
             send_input: String::new(),
             send_pending: false,
@@ -3078,6 +3080,12 @@ impl App {
     // --- Pane send helpers ---
 
     pub fn start_send_mode(&mut self) {
+        if !self.two_pane {
+            self.last_error = Some(
+                "Pane send requires exactly 2 WT panes (use 'assoc launch')".to_string(),
+            );
+            return;
+        }
         self.send_mode = true;
         self.send_input.clear();
     }

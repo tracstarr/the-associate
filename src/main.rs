@@ -39,6 +39,10 @@ struct Cli {
     /// Project directory to monitor (defaults to current directory)
     #[arg(long, global = true)]
     cwd: Option<PathBuf>,
+
+    /// Indicate that exactly two WT panes are open (enables pane-send with 'i')
+    #[arg(long, global = true)]
+    two_pane: bool,
 }
 
 #[derive(clap::Subcommand)]
@@ -140,7 +144,7 @@ fn main() -> Result<()> {
             rows,
             claude_args,
         }) => launch_wt(&project_cwd, resume, claude_ratio, cols, rows, &claude_args),
-        None => run_tui(project_cwd),
+        None => run_tui(project_cwd, cli.two_pane),
     }
 }
 
@@ -161,7 +165,7 @@ fn resolve_cwd(cwd: Option<PathBuf>) -> Result<PathBuf> {
     }
 }
 
-fn run_tui(project_cwd: PathBuf) -> Result<()> {
+fn run_tui(project_cwd: PathBuf, two_pane: bool) -> Result<()> {
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -170,7 +174,7 @@ fn run_tui(project_cwd: PathBuf) -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     // Run app
-    let result = run_app(&mut terminal, project_cwd);
+    let result = run_app(&mut terminal, project_cwd, two_pane);
 
     // Restore terminal
     disable_raw_mode()?;
@@ -225,6 +229,7 @@ fn launch_wt(
         .arg(&self_exe)
         .arg("--cwd")
         .arg(&*dir)
+        .arg("--two-pane")
         .arg(";")
         .arg("split-pane")
         .arg("-V")
@@ -255,8 +260,10 @@ fn launch_wt(
 fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     project_cwd: PathBuf,
+    two_pane: bool,
 ) -> Result<()> {
     let mut app = App::new(project_cwd);
+    app.two_pane = two_pane;
 
     // Initial data load
     app.load_all();
