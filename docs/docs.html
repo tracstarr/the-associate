@@ -573,6 +573,7 @@
         <a href="#usage" class="sidebar-link">Usage</a>
         <a href="#usage-tui" class="sidebar-link sub">TUI Dashboard</a>
         <a href="#usage-launch" class="sidebar-link sub">Side-by-Side Launch</a>
+        <a href="#usage-pane-send" class="sidebar-link sub">Pane Send</a>
       </div>
       <div class="sidebar-section">
         <div class="sidebar-heading">Configuration</div>
@@ -753,6 +754,46 @@ assoc launch -- --dangerously-skip-permissions</div>
           </tr>
         </tbody>
       </table>
+
+      <!-- ============================================================
+           PANE SEND
+           ============================================================ -->
+      <h3 id="usage-pane-send">Pane Send</h3>
+
+      <p>When running via <code>assoc launch</code> (exactly two Windows Terminal panes), you can send text directly to the Claude Code pane using the <kbd>i</kbd> key from any tab.</p>
+
+      <div class="callout callout-info">
+        <p><strong>Requires two-pane mode.</strong> Pressing <kbd>i</kbd> outside of <code>assoc launch</code> shows an error. Use <code>assoc launch</code> to get the side-by-side layout.</p>
+      </div>
+
+      <h4>How it works</h4>
+      <ol>
+        <li>Press <kbd>i</kbd> on any tab. An input bar appears at the bottom of the dashboard.</li>
+        <li>Type your message. On issue tabs (PRs, Issues, Jira, Linear) the input is pre-filled with the selected ticket's identifier and title as context.</li>
+        <li>Press <kbd>Enter</kbd> to send, or <kbd>Esc</kbd> to cancel.</li>
+        <li>The Associate copies the text to the clipboard, switches focus to the Claude Code pane, pastes the text, presses Enter, then returns focus to the dashboard.</li>
+      </ol>
+
+      <h4>Pre-fill behavior per tab</h4>
+      <table class="config-table">
+        <thead>
+          <tr><th>Tab</th><th>Pre-filled input</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>GitHub Issues</td><td><code>#123 Issue Title: </code></td></tr>
+          <tr><td>GitHub PRs</td><td><code>PR #123 PR Title: </code></td></tr>
+          <tr><td>Jira</td><td><code>PROJ-123 Summary: </code></td></tr>
+          <tr><td>Linear</td><td><code>TEAM-123 Title: </code></td></tr>
+          <tr><td>All other tabs</td><td>(empty — type freely)</td></tr>
+        </tbody>
+      </table>
+
+      <p>You can edit the pre-filled text before sending. The cursor is placed at the end so you can immediately type your question or instruction after the ticket context.</p>
+
+      <h4>Configuring focus direction</h4>
+      <p>By default, The Associate moves focus <strong>right</strong> to reach the Claude Code pane. If your layout differs, override this in <code>.assoc.toml</code>:</p>
+      <div class="code-block">[pane]
+direction = "left"   <span class="comment"># right (default), left, up, down</span></div>
 
       <!-- ============================================================
            CONFIGURATION
@@ -960,6 +1001,7 @@ linear = true</div>
           <tr><td><kbd>Ctrl+S</kbd></td><td>Git (browser)</td><td>Save the file being edited</td></tr>
           <tr><td><kbd>Esc</kbd></td><td>Git (browser)</td><td>Cancel editing</td></tr>
           <tr><td><kbd>Backspace</kbd></td><td>Git (browser)</td><td>Collapse directory or navigate to parent</td></tr>
+          <tr><td><kbd>i</kbd></td><td>All tabs</td><td>Open the pane send bar to type a message for Claude Code. On PRs / Issues / Jira / Linear, pre-fills with the selected ticket's identifier and title. Requires two-pane mode (<code>assoc launch</code>).</td></tr>
           <tr><td><kbd>p</kbd></td><td>PRs / Issues / Jira / Linear</td><td>Open the prompt modal to compose and launch a Claude Code task from the selected ticket</td></tr>
           <tr><td><kbd>o</kbd></td><td>PRs / Issues / Jira / Linear</td><td>Open the selected item in your web browser</td></tr>
           <tr><td><kbd>r</kbd></td><td>PRs / Issues / Jira / Linear</td><td>Refresh data from the remote service</td></tr>

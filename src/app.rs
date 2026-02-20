@@ -3087,7 +3087,29 @@ impl App {
             return;
         }
         self.send_mode = true;
-        self.send_input.clear();
+        self.send_input = self.build_send_prefill().unwrap_or_default();
+    }
+
+    fn build_send_prefill(&self) -> Option<String> {
+        match self.active_tab {
+            ActiveTab::GitHubIssues => {
+                let issue = self.issues_selected()?;
+                Some(format!("#{} {}: ", issue.number, issue.title))
+            }
+            ActiveTab::GitHubPRs => {
+                let pr = self.gh_selected_pr()?;
+                Some(format!("PR #{} {}: ", pr.number, pr.title))
+            }
+            ActiveTab::Jira => {
+                let issue = self.jira_selected_issue()?;
+                Some(format!("{} {}: ", issue.key, issue.summary))
+            }
+            ActiveTab::Linear => {
+                let issue = self.linear_selected_issue()?;
+                Some(format!("{} {}: ", issue.identifier, issue.title))
+            }
+            _ => None,
+        }
     }
 
     pub fn cancel_send_mode(&mut self) {
