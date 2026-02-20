@@ -2,6 +2,7 @@ pub mod filebrowser_view;
 pub mod git_view;
 pub mod github_view;
 pub mod help_overlay;
+pub mod issues_view;
 pub mod jira_view;
 pub mod layout;
 pub mod plans_view;

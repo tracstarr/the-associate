@@ -106,8 +106,12 @@ TUI KEYBINDINGS:
   b                  Toggle file browser (Git tab)
   e                  Edit file (file browser, Content pane)
   Ctrl+S / Esc       Save / cancel edit (file browser)
-  o                  Open in browser (PRs / Jira)
-  r                  Refresh data (PRs / Jira)
+  n                  New issue (Issues tab)
+  e                  Edit issue (Issues tab) / file (browser)
+  c                  Comment on issue (Issues tab)
+  x                  Close/reopen issue (Issues tab)
+  o                  Open in browser (PRs / Issues / Jira)
+  r                  Refresh data (PRs / Issues / Jira)
   t                  Show transitions (Jira)
   /                  Search issues (Jira)
   ?                  Toggle help overlay
@@ -297,6 +301,14 @@ fn run_app(
                 app.load_github_prs();
             }
 
+            // Poll GitHub Issues every 60s
+            if app.gh_issues_enabled
+                && app.gh_issues_repo.is_some()
+                && app.gh_issues_last_poll.elapsed() >= poll_interval
+            {
+                app.load_github_issues();
+            }
+
             // Poll Jira every 60s
             if app.has_jira && app.jira_last_poll.elapsed() >= poll_interval {
                 app.load_jira_issues();
@@ -316,7 +328,9 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             app.should_quit = true;
             return;
         }
-        KeyCode::Char('?') if !app.fb_editing && !app.jira_search_mode => {
+        KeyCode::Char('?')
+            if !app.fb_editing && !app.jira_search_mode && !app.gh_issues_editing =>
+        {
             app.show_help = !app.show_help;
             return;
         }
@@ -339,6 +353,12 @@ fn handle_key(app: &mut App, key: KeyEvent) {
     // File browser edit mode — pass keys to TextArea
     if app.fb_editing {
         handle_fb_edit_key(app, key);
+        return;
+    }
+
+    // GitHub Issues edit mode — pass keys to TextArea editors
+    if app.gh_issues_editing {
+        handle_issues_edit_key(app, key);
         return;
     }
 
@@ -443,16 +463,42 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             }
         }
 
-        // Edit file (file browser)
-        KeyCode::Char('e') => {
-            if app.active_tab == app::ActiveTab::Git && app.git_mode == app::GitMode::Browse {
+        // Edit file (file browser) or edit issue (Issues tab)
+        KeyCode::Char('e') => match app.active_tab {
+            app::ActiveTab::Git if app.git_mode == app::GitMode::Browse => {
                 app.fb_start_edit();
+            }
+            app::ActiveTab::GitHubIssues => {
+                app.issues_start_edit();
+            }
+            _ => {}
+        },
+
+        // New issue (Issues tab)
+        KeyCode::Char('n') => {
+            if app.active_tab == app::ActiveTab::GitHubIssues {
+                app.issues_start_create();
+            }
+        }
+
+        // Comment on issue (Issues tab)
+        KeyCode::Char('c') => {
+            if app.active_tab == app::ActiveTab::GitHubIssues {
+                app.issues_start_comment();
+            }
+        }
+
+        // Close/reopen issue (Issues tab)
+        KeyCode::Char('x') => {
+            if app.active_tab == app::ActiveTab::GitHubIssues {
+                app.issues_toggle_state();
             }
         }
 
         // Open in browser
         KeyCode::Char('o') => match app.active_tab {
             app::ActiveTab::GitHubPRs => app.gh_open_selected(),
+            app::ActiveTab::GitHubIssues => app.issues_open_in_browser(),
             app::ActiveTab::Jira => app.jira_open_selected(),
             _ => {}
         },
@@ -460,6 +506,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
         // Refresh
         KeyCode::Char('r') => match app.active_tab {
             app::ActiveTab::GitHubPRs => app.load_github_prs(),
+            app::ActiveTab::GitHubIssues => app.load_github_issues(),
             app::ActiveTab::Jira => app.load_jira_issues(),
             _ => {}
         },
@@ -480,6 +527,39 @@ fn handle_key(app: &mut App, key: KeyEvent) {
         }
 
         _ => {}
+    }
+}
+
+fn handle_issues_edit_key(app: &mut App, key: KeyEvent) {
+    match key.code {
+        KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.issues_save_edit();
+        }
+        KeyCode::Esc => {
+            app.issues_cancel_edit();
+        }
+        KeyCode::Tab => {
+            // Toggle between title and body fields
+            app.gh_issues_edit_field = match app.gh_issues_edit_field {
+                app::IssueEditField::Title => app::IssueEditField::Body,
+                app::IssueEditField::Body => app::IssueEditField::Title,
+            };
+        }
+        _ => {
+            // Pass key to active TextArea
+            match app.gh_issues_edit_field {
+                app::IssueEditField::Title => {
+                    if let Some(ref mut editor) = app.gh_issues_title_editor {
+                        editor.input(key);
+                    }
+                }
+                app::IssueEditField::Body => {
+                    if let Some(ref mut editor) = app.gh_issues_body_editor {
+                        editor.input(key);
+                    }
+                }
+            }
+        }
     }
 }
 

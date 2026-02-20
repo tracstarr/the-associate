@@ -25,6 +25,7 @@ pub fn draw_tab_bar(f: &mut Frame, area: Rect, app: &App) {
                     format!("{}:PRs", num)
                 }
             }
+            ActiveTab::GitHubIssues => format!("{}:Issues", num),
             ActiveTab::Jira => format!("{}:Jira", num),
         };
 

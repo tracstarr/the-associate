@@ -69,3 +69,72 @@ impl PullRequest {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// GitHub Issues
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubIssue {
+    pub number: u64,
+    pub title: String,
+    pub state: String,
+    pub url: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub author: IssueAuthor,
+    #[serde(default)]
+    pub labels: Vec<IssueLabel>,
+    #[serde(default)]
+    pub assignees: Vec<IssueAssignee>,
+    pub body: Option<String>,
+    #[serde(default)]
+    pub comments: Vec<IssueComment>,
+    #[serde(default)]
+    pub milestone: Option<IssueMilestone>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct IssueAuthor {
+    pub login: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct IssueLabel {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct IssueAssignee {
+    pub login: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct IssueComment {
+    pub author: IssueAuthor,
+    pub body: String,
+    #[serde(default)]
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct IssueMilestone {
+    pub title: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum FlatIssueItem {
+    SectionHeader(String),
+    Issue(Box<GitHubIssue>),
+}
+
+impl GitHubIssue {
+    pub fn state_icon(&self) -> &'static str {
+        match self.state.as_str() {
+            "OPEN" => "[O]",
+            "CLOSED" => "[X]",
+            _ => "[ ]",
+        }
+    }
+}

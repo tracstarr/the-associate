@@ -37,6 +37,17 @@ pub struct ProjectConfig {
 #[derive(Debug, Deserialize)]
 pub struct GithubConfig {
     pub repo: Option<String>,
+    pub issues: Option<GithubIssuesConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GithubIssuesConfig {
+    /// Set to false to disable the Issues tab even when gh is available.
+    pub enabled: Option<bool>,
+    /// Override the repo for fetching issues (e.g. "owner/repo").
+    pub repo: Option<String>,
+    /// Issue state filter: "open", "closed", or "all". Default: "open".
+    pub state: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -68,6 +79,32 @@ impl ProjectConfig {
 
     pub fn github_repo(&self) -> Option<&str> {
         self.github.as_ref().and_then(|g| g.repo.as_deref())
+    }
+
+    /// Whether the Issues tab is explicitly disabled in config.
+    pub fn github_issues_enabled(&self) -> bool {
+        self.github
+            .as_ref()
+            .and_then(|g| g.issues.as_ref())
+            .and_then(|i| i.enabled)
+            .unwrap_or(true)
+    }
+
+    /// Override repo for issues (falls back to github.repo / git remote).
+    pub fn github_issues_repo(&self) -> Option<&str> {
+        self.github
+            .as_ref()
+            .and_then(|g| g.issues.as_ref())
+            .and_then(|i| i.repo.as_deref())
+    }
+
+    /// Issue state filter. Default: "open".
+    pub fn github_issues_state(&self) -> &str {
+        self.github
+            .as_ref()
+            .and_then(|g| g.issues.as_ref())
+            .and_then(|i| i.state.as_deref())
+            .unwrap_or("open")
     }
 
     pub fn jira_project(&self) -> Option<&str> {
