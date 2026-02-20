@@ -108,7 +108,8 @@ TUI KEYBINDINGS:
   Ctrl+S / Esc       Save / cancel edit (file browser)
   n                  New issue (Issues tab)
   e                  Edit issue (Issues tab) / file (browser)
-  c                  Comment (Issues) / Launch Claude (PRs / Jira)
+  c                  Comment on issue (Issues tab)
+  p                  Launch Claude Code prompt (PRs / Issues / Linear / Jira)
   x                  Close/reopen issue (Issues tab)
   d / Del            Delete file (Sessions / Teams / Todos / Plans)
   o                  Open in browser (PRs / Issues / Jira / Linear)
@@ -506,10 +507,19 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             }
         }
 
-        // Comment (Issues tab) / Launch Claude Code (PRs / Jira)
-        KeyCode::Char('c') => match app.active_tab {
-            app::ActiveTab::GitHubIssues => app.issues_start_comment(),
-            app::ActiveTab::GitHubPRs | app::ActiveTab::Jira => {
+        // Comment on issue (Issues tab)
+        KeyCode::Char('c') => {
+            if app.active_tab == app::ActiveTab::GitHubIssues {
+                app.issues_start_comment();
+            }
+        }
+
+        // Launch Claude Code prompt modal (all issue tabs)
+        KeyCode::Char('p') => match app.active_tab {
+            app::ActiveTab::GitHubPRs
+            | app::ActiveTab::GitHubIssues
+            | app::ActiveTab::Linear
+            | app::ActiveTab::Jira => {
                 app.open_prompt_modal_for_current();
             }
             _ => {}
@@ -552,6 +562,13 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             if app.active_tab == app::ActiveTab::Jira {
                 app.jira_search_mode = true;
                 app.jira_search_input.clear();
+            }
+        }
+
+        // Kill selected process (Processes tab)
+        KeyCode::Char('x') => {
+            if app.active_tab == app::ActiveTab::Processes {
+                app.kill_selected_process();
             }
         }
 

@@ -2424,7 +2424,7 @@ impl App {
 
     // --- Prompt modal helpers ---
 
-    /// Open the prompt modal for the currently selected ticket (GitHub PR or Jira issue).
+    /// Open the prompt modal for the currently selected ticket (any issue management tab).
     pub fn open_prompt_modal_for_current(&mut self) {
         if !self.has_claude {
             self.last_error = Some("claude CLI not found on PATH".to_string());
@@ -2435,6 +2435,12 @@ impl App {
             ActiveTab::GitHubPRs => self
                 .gh_selected_pr()
                 .map(prompt_builder::ticket_from_github_pr),
+            ActiveTab::GitHubIssues => self
+                .issues_selected()
+                .map(prompt_builder::ticket_from_github_issue),
+            ActiveTab::Linear => self
+                .linear_selected_issue()
+                .map(prompt_builder::ticket_from_linear),
             ActiveTab::Jira => self
                 .jira_selected_issue()
                 .map(prompt_builder::ticket_from_jira),
@@ -2654,5 +2660,24 @@ impl App {
         }
         let idx = self.process_index.min(self.processes.len() - 1);
         Some(&self.processes[idx])
+    }
+
+    /// Kill the currently selected process.
+    pub fn kill_selected_process(&mut self) {
+        if self.processes.is_empty() {
+            return;
+        }
+        let idx = self.process_index.min(self.processes.len() - 1);
+        let id = self.processes[idx].id;
+
+        if self.processes[idx].status != ProcessStatus::Running {
+            return;
+        }
+
+        if let Some(pos) = self.process_children.iter_mut().position(|(pid, _)| *pid == id) {
+            let _ = self.process_children[pos].1.kill();
+            self.process_children.remove(pos);
+        }
+        self.processes[idx].status = ProcessStatus::Failed;
     }
 }

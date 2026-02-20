@@ -152,7 +152,7 @@ fn hint_text(app: &App) -> Vec<(&'static str, &'static str)> {
             ("j/k", "nav"),
             ("o", "open"),
             ("r", "refresh"),
-            ("c", "claude"),
+            ("p", "prompt"),
         ],
         ActiveTab::GitHubIssues => vec![
             ("j/k", "nav"),
@@ -162,6 +162,7 @@ fn hint_text(app: &App) -> Vec<(&'static str, &'static str)> {
             ("x", "close/open"),
             ("o", "browser"),
             ("r", "refresh"),
+            ("p", "prompt"),
         ],
         ActiveTab::Jira => vec![
             ("j/k", "nav"),
@@ -169,10 +170,15 @@ fn hint_text(app: &App) -> Vec<(&'static str, &'static str)> {
             ("r", "refresh"),
             ("/", "search"),
             ("t", "transition"),
-            ("c", "claude"),
+            ("p", "prompt"),
         ],
-        ActiveTab::Linear => vec![("j/k", "nav"), ("o", "open"), ("r", "refresh")],
-        ActiveTab::Processes => vec![("j/k", "nav"), ("h/l", "panes")],
+        ActiveTab::Linear => vec![
+            ("j/k", "nav"),
+            ("o", "open"),
+            ("r", "refresh"),
+            ("p", "prompt"),
+        ],
+        ActiveTab::Processes => vec![("j/k", "nav"), ("h/l", "panes"), ("x", "kill")],
     };
     hints.push(("^H", "help"));
     hints

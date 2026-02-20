@@ -27,6 +27,8 @@ pub struct SpawnedProcess {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TicketSource {
     GitHubPR,
+    GitHubIssue,
+    Linear,
     Jira,
 }
 
