@@ -1,6 +1,14 @@
 # Contributing to The Associate
 
-## Prerequisites
+## Installing
+
+```powershell
+irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1 | iex
+```
+
+Downloads `assoc.exe` from the latest GitHub release and installs to `%LOCALAPPDATA%\Programs\assoc` on your PATH.
+
+## Prerequisites (for development)
 
 - Rust toolchain (`stable-x86_64-pc-windows-gnu`) via [rustup](https://rustup.rs/)
 - [MSYS2](https://www.msys2.org/) with MinGW64 (`C:\msys64\mingw64\bin` on PATH) — required for the GNU linker
