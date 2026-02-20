@@ -61,6 +61,8 @@ fn draw_process_list(f: &mut Frame, area: Rect, app: &App) {
 
             let source_icon = match proc.source {
                 TicketSource::GitHubPR => "GH",
+                TicketSource::GitHubIssue => "GH",
+                TicketSource::Linear => "LN",
                 TicketSource::Jira => "JR",
             };
 

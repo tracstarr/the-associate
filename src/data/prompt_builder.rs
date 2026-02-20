@@ -1,5 +1,6 @@
-use crate::model::github::PullRequest;
+use crate::model::github::{GitHubIssue, PullRequest};
 use crate::model::jira::JiraIssue;
+use crate::model::linear::LinearIssue;
 use crate::model::process::TicketInfo;
 use crate::model::process::TicketSource;
 
@@ -23,6 +24,48 @@ pub fn ticket_from_github_pr(pr: &PullRequest) -> TicketInfo {
         ),
         labels: pr.labels.iter().map(|l| l.name.clone()).collect(),
         url: pr.url.clone(),
+        extra_fields: extra,
+    }
+}
+
+/// Extract ticket info from a GitHub Issue.
+pub fn ticket_from_github_issue(issue: &GitHubIssue) -> TicketInfo {
+    let mut extra = Vec::new();
+    extra.push(("Author".to_string(), issue.author.login.clone()));
+    extra.push(("State".to_string(), issue.state.clone()));
+    if !issue.assignees.is_empty() {
+        let assignees = issue.assignees.iter().map(|a| a.login.clone()).collect::<Vec<_>>().join(", ");
+        extra.push(("Assignees".to_string(), assignees));
+    }
+    if let Some(ref ms) = issue.milestone {
+        extra.push(("Milestone".to_string(), ms.title.clone()));
+    }
+
+    TicketInfo {
+        source: TicketSource::GitHubIssue,
+        key: format!("#{}", issue.number),
+        title: issue.title.clone(),
+        description: issue.body.clone().unwrap_or_default(),
+        labels: issue.labels.iter().map(|l| l.name.clone()).collect(),
+        url: issue.url.clone(),
+        extra_fields: extra,
+    }
+}
+
+/// Extract ticket info from a Linear issue.
+pub fn ticket_from_linear(issue: &LinearIssue) -> TicketInfo {
+    let extra = vec![
+        ("Status".to_string(), issue.state.name.clone()),
+        ("Priority".to_string(), issue.priority_label.clone()),
+    ];
+
+    TicketInfo {
+        source: TicketSource::Linear,
+        key: issue.identifier.clone(),
+        title: issue.title.clone(),
+        description: issue.description.clone().unwrap_or_default(),
+        labels: issue.labels.nodes.iter().map(|l| l.name.clone()).collect(),
+        url: issue.url.clone(),
         extra_fields: extra,
     }
 }
@@ -101,6 +144,8 @@ Work as a team — use Claude's team/subagent capabilities to run tasks in paral
 Do not ask for user input — work autonomously to completion."#,
         source = match ticket.source {
             TicketSource::GitHubPR => "GitHub PR",
+            TicketSource::GitHubIssue => "GitHub Issue",
+            TicketSource::Linear => "Linear",
             TicketSource::Jira => "Jira",
         },
         key = ticket.key,
