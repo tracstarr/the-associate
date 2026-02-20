@@ -641,6 +641,14 @@
            ============================================================ -->
       <h2 id="installation">Installation</h2>
 
+      <h3>Quick install (recommended)</h3>
+
+      <p>Run this one-liner in PowerShell to download and install the latest release:</p>
+
+      <div class="code-block">irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1 | iex</div>
+
+      <p>This downloads <code>assoc.exe</code> from the latest GitHub release and installs it to <code>%LOCALAPPDATA%\Programs\assoc</code>, adding it to your user PATH automatically.</p>
+
       <h3>Build from source</h3>
 
       <p>Clone the repository and build the release binary:</p>
@@ -652,12 +660,6 @@ export PATH="/c/Users/$USER/.cargo/bin:$PATH:/c/msys64/mingw64/bin"
 cargo build --release</div>
 
       <p>The binary will be at <code>target/release/assoc.exe</code>. Copy it to a directory on your PATH for easy access.</p>
-
-      <h3>Install directly</h3>
-
-      <div class="code-block">cargo install --path .</div>
-
-      <p>This compiles and installs <code>assoc.exe</code> to <code>~/.cargo/bin/</code>.</p>
 
       <div class="callout callout-info">
         <p><strong>Note:</strong> The release profile uses <code>strip = true</code>, <code>lto = true</code>, and <code>opt-level = "z"</code> for a small, optimized binary.</p>
