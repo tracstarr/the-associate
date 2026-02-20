@@ -5,7 +5,11 @@
 #   irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1 | iex
 #
 # Uninstall:
-#   $env:ASSOC_ACTION='uninstall'; irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1 | iex
+#   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1))) -Uninstall
+
+param(
+    [switch]$Uninstall
+)
 
 $ErrorActionPreference = "Stop"
 $repo = "tracstarr/the-associate"
@@ -15,10 +19,6 @@ $binaryPath = Join-Path $installDir "assoc.exe"
 # Legacy install location (< v0.5)
 $legacyDir = Join-Path $env:LOCALAPPDATA "Programs\assoc"
 $legacyBinary = Join-Path $legacyDir "assoc.exe"
-
-$action = if ($env:ASSOC_ACTION) { $env:ASSOC_ACTION.ToLower() } else { "install" }
-# Clear the env var so it doesn't persist in the session
-if ($env:ASSOC_ACTION) { Remove-Item Env:\ASSOC_ACTION -ErrorAction SilentlyContinue }
 
 function Remove-FromPath {
     param([string]$Dir)
@@ -78,7 +78,7 @@ function Get-LatestRelease {
 }
 
 # === UNINSTALL ===
-if ($action -eq "uninstall") {
+if ($Uninstall) {
     Write-Host "Uninstalling The Associate..." -ForegroundColor Cyan
 
     $found = $false

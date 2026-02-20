@@ -40,7 +40,7 @@ irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1 |
 Remove The Associate and clean up the PATH entry:
 
 ```powershell
-$env:ASSOC_ACTION='uninstall'; irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1 | iex
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1))) -Uninstall
 ```
 
 ### Build from source

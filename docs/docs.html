@@ -666,7 +666,7 @@
 
       <p>Remove The Associate and clean up the PATH entry:</p>
 
-      <div class="code-block">$env:ASSOC_ACTION='uninstall'; irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1 | iex</div>
+      <div class="code-block">& ([scriptblock]::Create((irm https://raw.githubusercontent.com/tracstarr/the-associate/main/install.ps1))) -Uninstall</div>
 
       <h3>Build from source</h3>
 
