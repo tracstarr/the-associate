@@ -1,5 +1,3 @@
-use std::io::Read;
-
 use anyhow::Result;
 
 use crate::model::github::{FlatIssueItem, FlatPrItem, GitHubIssue, PullRequest};
@@ -22,36 +20,7 @@ pub fn list_open_prs(repo: &str) -> Result<Vec<PullRequest>> {
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()?;
-    let output = {
-        let timeout = std::time::Duration::from_secs(30);
-        let start = std::time::Instant::now();
-        loop {
-            match child.try_wait()? {
-                Some(status) => {
-                    let mut stdout = Vec::new();
-                    let mut stderr = Vec::new();
-                    if let Some(mut s) = child.stdout.take() {
-                        s.read_to_end(&mut stdout).ok();
-                    }
-                    if let Some(mut s) = child.stderr.take() {
-                        s.read_to_end(&mut stderr).ok();
-                    }
-                    break std::process::Output {
-                        status,
-                        stdout,
-                        stderr,
-                    };
-                }
-                None => {
-                    if start.elapsed() > timeout {
-                        child.kill().ok();
-                        anyhow::bail!("command timed out after 30 seconds");
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                }
-            }
-        }
-    };
+    let output = wait_with_output(&mut child)?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -127,7 +96,11 @@ pub fn categorize_prs(prs: &[PullRequest], current_user: &str) -> Vec<FlatPrItem
 // GitHub Issues
 // ---------------------------------------------------------------------------
 
-/// Run a gh command with a 30-second timeout, returning stdout on success.
+/// Run a gh command, returning stdout on success.
+///
+/// Reads stdout and stderr concurrently in separate threads to prevent the
+/// pipe-buffer deadlock that occurs when the child writes more data than the
+/// OS pipe buffer can hold before the parent drains it.
 fn run_gh(args: &[&str]) -> Result<Vec<u8>> {
     let mut child = std::process::Command::new("gh")
         .args(args)
@@ -135,40 +108,44 @@ fn run_gh(args: &[&str]) -> Result<Vec<u8>> {
         .stderr(std::process::Stdio::piped())
         .spawn()?;
 
-    let timeout = std::time::Duration::from_secs(30);
-    let start = std::time::Instant::now();
-    let output = loop {
-        match child.try_wait()? {
-            Some(status) => {
-                let mut stdout = Vec::new();
-                let mut stderr = Vec::new();
-                if let Some(mut s) = child.stdout.take() {
-                    s.read_to_end(&mut stdout).ok();
-                }
-                if let Some(mut s) = child.stderr.take() {
-                    s.read_to_end(&mut stderr).ok();
-                }
-                break std::process::Output {
-                    status,
-                    stdout,
-                    stderr,
-                };
-            }
-            None => {
-                if start.elapsed() > timeout {
-                    child.kill().ok();
-                    anyhow::bail!("gh command timed out after 30 seconds");
-                }
-                std::thread::sleep(std::time::Duration::from_millis(100));
-            }
-        }
-    };
+    let output = wait_with_output(&mut child)?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!("gh failed: {}", stderr.trim());
     }
     Ok(output.stdout)
+}
+
+/// Wait for a child process while concurrently draining its stdout and stderr
+/// pipes. Using try_wait() and reading after exit can deadlock when output
+/// exceeds the pipe buffer capacity — the child blocks on write, never exits.
+fn wait_with_output(child: &mut std::process::Child) -> Result<std::process::Output> {
+    use std::io::Read;
+
+    let mut stdout_pipe = child.stdout.take();
+    let mut stderr_pipe = child.stderr.take();
+
+    let stdout_thread = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(ref mut pipe) = stdout_pipe {
+            pipe.read_to_end(&mut buf).ok();
+        }
+        buf
+    });
+    let stderr_thread = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(ref mut pipe) = stderr_pipe {
+            pipe.read_to_end(&mut buf).ok();
+        }
+        buf
+    });
+
+    let status = child.wait()?;
+    let stdout = stdout_thread.join().unwrap_or_default();
+    let stderr = stderr_thread.join().unwrap_or_default();
+
+    Ok(std::process::Output { status, stdout, stderr })
 }
 
 /// Check whether the repo has issues enabled by querying the repo metadata.
