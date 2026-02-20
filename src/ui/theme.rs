@@ -108,6 +108,17 @@ pub const ISSUE_LABEL: Style = Style::new().fg(Color::Yellow);
 pub const ISSUE_SECTION: Style = Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD);
 pub const ISSUE_COMMENT_AUTHOR: Style = Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD);
 
+// Linear
+pub const LINEAR_URGENT: Style = Style::new().fg(Color::Red).add_modifier(Modifier::BOLD);
+pub const LINEAR_HIGH: Style = Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD);
+pub const LINEAR_MEDIUM: Style = Style::new().fg(Color::Blue);
+pub const LINEAR_LOW: Style = Style::new().fg(Color::DarkGray);
+pub const LINEAR_STARTED: Style = Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD);
+pub const LINEAR_UNSTARTED: Style = Style::new()
+    .fg(Color::DarkGray)
+    .add_modifier(Modifier::BOLD);
+pub const LINEAR_COMPLETED: Style = Style::new().fg(Color::Green).add_modifier(Modifier::BOLD);
+
 // Jira
 pub const JIRA_TODO: Style = Style::new()
     .fg(Color::DarkGray)

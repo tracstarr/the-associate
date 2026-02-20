@@ -4,8 +4,8 @@ use std::time::Instant;
 
 use crate::config::{self, ProjectConfig};
 use crate::data::{
-    cli_detect, filebrowser, git, github, inboxes, jira, path_encoding, plans, sessions, subagents,
-    tasks, teams, todos, transcripts,
+    cli_detect, filebrowser, git, github, inboxes, jira, linear, path_encoding, plans, sessions,
+    subagents, tasks, teams, todos, transcripts,
 };
 use crate::event::FileChange;
 use crate::model::agent_status::{self, AgentStatus};
@@ -14,6 +14,7 @@ use crate::model::git::{DiffLine, FlatGitItem, GitStatus};
 use crate::model::github::{FlatIssueItem, FlatPrItem, GitHubIssue, PullRequest};
 use crate::model::inbox::InboxMessage;
 use crate::model::jira::{FlatJiraItem, JiraIssue, JiraTransition};
+use crate::model::linear::{FlatLinearItem, LinearIssue};
 use crate::model::plan::{MarkdownLine, PlanFile as PlanFileModel};
 use crate::model::session::SessionEntry;
 use crate::model::task::Task;
@@ -31,6 +32,7 @@ pub enum ActiveTab {
     GitHubPRs,
     GitHubIssues,
     Jira,
+    Linear,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -100,6 +102,12 @@ pub enum IssueEditField {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum JiraPane {
+    List,
+    Detail,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum LinearPane {
     List,
     Detail,
 }
@@ -219,6 +227,15 @@ pub struct App {
     pub jira_transitions: Vec<JiraTransition>,
     pub jira_last_poll: Instant,
 
+    // Linear tab
+    pub has_linear: bool,
+    pub linear_issues: Vec<LinearIssue>,
+    pub linear_flat_list: Vec<FlatLinearItem>,
+    pub linear_index: usize,
+    pub linear_pane: LinearPane,
+    pub linear_detail_scroll: usize,
+    pub linear_last_poll: Instant,
+
     // Status
     pub last_update: Instant,
     pub last_error: Option<String>,
@@ -232,6 +249,7 @@ impl App {
 
         let has_gh = cli_detect::is_available("gh");
         let has_jira = cli_detect::is_available("acli");
+        let has_linear = project_config.linear_api_key().is_some();
         // Config github.repo overrides git remote detection
         let gh_repo = project_config.github_repo().map(String::from).or_else(|| {
             if has_gh {
@@ -362,6 +380,14 @@ impl App {
             jira_transitions: Vec::new(),
             jira_last_poll: Instant::now(),
 
+            has_linear,
+            linear_issues: Vec::new(),
+            linear_flat_list: Vec::new(),
+            linear_index: 0,
+            linear_pane: LinearPane::List,
+            linear_detail_scroll: 0,
+            linear_last_poll: Instant::now(),
+
             last_update: Instant::now(),
             last_error: None,
         }
@@ -385,6 +411,9 @@ impl App {
         if self.has_jira {
             tabs.push(ActiveTab::Jira);
         }
+        if self.has_linear {
+            tabs.push(ActiveTab::Linear);
+        }
         tabs
     }
 
@@ -398,6 +427,7 @@ impl App {
         self.load_github_prs();
         self.load_github_issues();
         self.load_jira_issues();
+        self.load_linear_issues();
         self.last_update = Instant::now();
     }
 
@@ -865,6 +895,14 @@ impl App {
                     self.jira_detail_scroll = self.jira_detail_scroll.saturating_add(1);
                 }
             },
+            ActiveTab::Linear => match self.linear_pane {
+                LinearPane::List => {
+                    self.linear_skip_to_next_issue();
+                }
+                LinearPane::Detail => {
+                    self.linear_detail_scroll = self.linear_detail_scroll.saturating_add(1);
+                }
+            },
         }
     }
 
@@ -967,6 +1005,14 @@ impl App {
                     self.jira_detail_scroll = self.jira_detail_scroll.saturating_sub(1);
                 }
             },
+            ActiveTab::Linear => match self.linear_pane {
+                LinearPane::List => {
+                    self.linear_skip_to_prev_issue();
+                }
+                LinearPane::Detail => {
+                    self.linear_detail_scroll = self.linear_detail_scroll.saturating_sub(1);
+                }
+            },
         }
     }
 
@@ -1004,6 +1050,9 @@ impl App {
             }
             ActiveTab::Jira => {
                 self.jira_pane = JiraPane::List;
+            }
+            ActiveTab::Linear => {
+                self.linear_pane = LinearPane::List;
             }
         }
     }
@@ -1048,6 +1097,9 @@ impl App {
             ActiveTab::Jira => {
                 self.jira_pane = JiraPane::Detail;
             }
+            ActiveTab::Linear => {
+                self.linear_pane = LinearPane::Detail;
+            }
         }
     }
 
@@ -1088,6 +1140,11 @@ impl App {
                 if self.jira_pane == JiraPane::List {
                     self.jira_load_detail();
                     self.jira_pane = JiraPane::Detail;
+                }
+            }
+            ActiveTab::Linear => {
+                if self.linear_pane == LinearPane::List {
+                    self.linear_pane = LinearPane::Detail;
                 }
             }
             _ => {}
@@ -1182,6 +1239,15 @@ impl App {
                 }
                 JiraPane::Detail => {
                     self.jira_detail_scroll = 0;
+                }
+            },
+            ActiveTab::Linear => match self.linear_pane {
+                LinearPane::List => {
+                    self.linear_index = 0;
+                    self.linear_skip_to_issue_entry();
+                }
+                LinearPane::Detail => {
+                    self.linear_detail_scroll = 0;
                 }
             },
         }
@@ -1331,6 +1397,24 @@ impl App {
                 }
                 JiraPane::Detail => {
                     self.jira_detail_scroll = usize::MAX;
+                }
+            },
+            ActiveTab::Linear => match self.linear_pane {
+                LinearPane::List => {
+                    if !self.linear_flat_list.is_empty() {
+                        self.linear_index = self.linear_flat_list.len() - 1;
+                        while self.linear_index > 0
+                            && matches!(
+                                self.linear_flat_list[self.linear_index],
+                                FlatLinearItem::StateHeader(_, _)
+                            )
+                        {
+                            self.linear_index -= 1;
+                        }
+                    }
+                }
+                LinearPane::Detail => {
+                    self.linear_detail_scroll = usize::MAX;
                 }
             },
         }
@@ -2054,6 +2138,97 @@ impl App {
 
     pub fn jira_open_selected(&self) {
         if let Some(issue) = self.jira_selected_issue() {
+            if !issue.url.is_empty() {
+                cli_detect::open_url(&issue.url);
+            }
+        }
+    }
+
+    // --- Linear helpers ---
+
+    pub fn load_linear_issues(&mut self) {
+        if !self.has_linear {
+            return;
+        }
+        let api_key = match self.project_config.linear_api_key() {
+            Some(k) => k.to_string(),
+            None => return,
+        };
+        let username = self.project_config.linear_username().map(|s| s.to_string());
+        let team = self.project_config.linear_team().map(|s| s.to_string());
+
+        match linear::fetch_my_issues(&api_key, username.as_deref(), team.as_deref()) {
+            Ok(issues) => {
+                self.linear_flat_list = linear::categorize_issues(&issues);
+                self.linear_issues = issues;
+                if self.linear_index >= self.linear_flat_list.len() {
+                    self.linear_index = 0;
+                    self.linear_skip_to_issue_entry();
+                }
+                self.linear_last_poll = Instant::now();
+            }
+            Err(e) => {
+                self.last_error = Some(format!("Linear: {}", e));
+            }
+        }
+    }
+
+    fn linear_skip_to_next_issue(&mut self) {
+        if self.linear_flat_list.is_empty() {
+            return;
+        }
+        let start = self.linear_index + 1;
+        for i in start..self.linear_flat_list.len() {
+            if matches!(self.linear_flat_list[i], FlatLinearItem::Issue(_)) {
+                self.linear_index = i;
+                return;
+            }
+        }
+    }
+
+    fn linear_skip_to_prev_issue(&mut self) {
+        if self.linear_index == 0 || self.linear_flat_list.is_empty() {
+            return;
+        }
+        for i in (0..self.linear_index).rev() {
+            if matches!(self.linear_flat_list[i], FlatLinearItem::Issue(_)) {
+                self.linear_index = i;
+                return;
+            }
+        }
+    }
+
+    fn linear_skip_to_issue_entry(&mut self) {
+        if self.linear_flat_list.is_empty() {
+            return;
+        }
+        let idx = self.linear_index.min(self.linear_flat_list.len() - 1);
+        if matches!(
+            self.linear_flat_list[idx],
+            FlatLinearItem::StateHeader(_, _)
+        ) {
+            for i in (idx + 1)..self.linear_flat_list.len() {
+                if matches!(self.linear_flat_list[i], FlatLinearItem::Issue(_)) {
+                    self.linear_index = i;
+                    return;
+                }
+            }
+        }
+    }
+
+    pub fn linear_selected_issue(&self) -> Option<&LinearIssue> {
+        if self.linear_flat_list.is_empty() {
+            return None;
+        }
+        let idx = self.linear_index.min(self.linear_flat_list.len() - 1);
+        match &self.linear_flat_list[idx] {
+            FlatLinearItem::Issue(issue) => Some(issue),
+            _ => None,
+        }
+    }
+
+    pub fn linear_open_selected(&self) {
+        if let Some(issue) = self.linear_selected_issue() {
             if !issue.url.is_empty() {
                 cli_detect::open_url(&issue.url);
             }

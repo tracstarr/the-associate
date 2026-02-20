@@ -5,6 +5,7 @@ pub mod help_overlay;
 pub mod issues_view;
 pub mod jira_view;
 pub mod layout;
+pub mod linear_view;
 pub mod plans_view;
 pub mod sessions_view;
 pub mod tabs;
