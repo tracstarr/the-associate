@@ -17,10 +17,14 @@ pub struct SpawnedProcess {
     pub prompt: String,
     /// Working directory where the process was spawned.
     pub cwd: PathBuf,
-    /// Captured stdout lines.
+    /// Captured stdout lines (raw, kept for debug).
     pub output_lines: Vec<String>,
     /// Captured stderr lines.
     pub error_lines: Vec<String>,
+    /// Session ID extracted from stream-json init event.
+    pub session_id: Option<String>,
+    /// Human-readable parsed progress lines for the UI.
+    pub progress_lines: Vec<String>,
 }
 
 /// Where the ticket came from.

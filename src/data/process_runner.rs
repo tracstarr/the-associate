@@ -36,7 +36,7 @@ pub fn spawn_claude_headless(
             prompt,
             "--dangerously-skip-permissions",
             "--output-format",
-            "text",
+            "stream-json",
             "--verbose",
         ])
         .current_dir(cwd)

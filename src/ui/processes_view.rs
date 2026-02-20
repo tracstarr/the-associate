@@ -107,7 +107,12 @@ fn draw_process_output(f: &mut Frame, area: Rect, app: &App) {
             ProcessStatus::Completed => "DONE",
             ProcessStatus::Failed => "FAILED",
         };
-        format!(" {} {} [{}] ", p.label, p.title, status_str)
+        let sid_suffix = p
+            .session_id
+            .as_deref()
+            .map(|s| format!(" [sid:{}]", &s[..8.min(s.len())]))
+            .unwrap_or_default();
+        format!(" {} {} [{}]{} ", p.label, p.title, status_str, sid_suffix)
     } else {
         " Output ".to_string()
     };
@@ -128,13 +133,31 @@ fn draw_process_output(f: &mut Frame, area: Rect, app: &App) {
     let inner = block.inner(area);
     f.render_widget(block, area);
 
-    // Combine stdout and stderr with markers
     let mut lines: Vec<Line> = Vec::new();
-    for line in &proc.output_lines {
-        lines.push(Line::from(Span::styled(
-            line.as_str(),
-            theme::PROCESS_STDOUT,
-        )));
+
+    if !proc.progress_lines.is_empty() {
+        for line in &proc.progress_lines {
+            let style = if line.starts_with("->") {
+                theme::TX_TOOL
+            } else if line.starts_with("[SUCCESS") {
+                theme::PROCESS_COMPLETED
+            } else if line.starts_with("[FAIL") {
+                theme::PROCESS_FAILED
+            } else if line.starts_with("Session:") {
+                theme::TX_SYSTEM
+            } else {
+                theme::PROCESS_STDOUT
+            };
+            lines.push(Line::from(Span::styled(line.as_str(), style)));
+        }
+    } else {
+        // Fall back to raw output lines dimly if no parsed progress yet
+        for line in &proc.output_lines {
+            lines.push(Line::from(Span::styled(
+                line.as_str(),
+                theme::PROCESS_STDOUT.add_modifier(Modifier::DIM),
+            )));
+        }
     }
 
     if !proc.error_lines.is_empty() {
