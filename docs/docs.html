@@ -597,6 +597,7 @@
         <a href="#tab-git" class="sidebar-link sub">Git</a>
         <a href="#tab-plans" class="sidebar-link sub">Plans</a>
         <a href="#tab-prs" class="sidebar-link sub">PRs</a>
+        <a href="#tab-issues" class="sidebar-link sub">Issues</a>
         <a href="#tab-jira" class="sidebar-link sub">Jira</a>
       </div>
       <div class="sidebar-section">
@@ -761,6 +762,11 @@ assoc launch -- --dangerously-skip-permissions</div>
 [github]
 repo = "owner/repo-name"    <span class="comment"># Override auto-detected GitHub repo</span>
 
+[github.issues]
+enabled = true              <span class="comment"># Set to false to hide the Issues tab</span>
+repo = "owner/repo-name"    <span class="comment"># Override repo for issues specifically</span>
+state = "open"              <span class="comment"># "open", "closed", or "all"</span>
+
 [jira]
 project = "PROJ"             <span class="comment"># Jira project key for filtering issues</span>
 jql = "assignee = currentUser() AND resolution = Unresolved"
@@ -779,6 +785,21 @@ tail_lines = 200             <span class="comment"># Lines to load from end of t
             <td><code>github.repo</code></td>
             <td>String</td>
             <td>GitHub repository in <code>owner/name</code> format. Overrides automatic detection from the git remote.</td>
+          </tr>
+          <tr>
+            <td><code>github.issues.enabled</code></td>
+            <td>Boolean</td>
+            <td>Set to <code>false</code> to hide the Issues tab even when <code>gh</code> is available. Default: <code>true</code>.</td>
+          </tr>
+          <tr>
+            <td><code>github.issues.repo</code></td>
+            <td>String</td>
+            <td>Override the repository used for the Issues tab specifically. Falls back to <code>github.repo</code>, then auto-detection.</td>
+          </tr>
+          <tr>
+            <td><code>github.issues.state</code></td>
+            <td>String</td>
+            <td>Filter issues by state: <code>"open"</code>, <code>"closed"</code>, or <code>"all"</code>. Default: <code>"open"</code>.</td>
           </tr>
         </tbody>
       </table>
@@ -876,8 +897,12 @@ tail_lines = 200             <span class="comment"># Lines to load from end of t
           <tr><td><kbd>Ctrl+S</kbd></td><td>Git (browser)</td><td>Save the file being edited</td></tr>
           <tr><td><kbd>Esc</kbd></td><td>Git (browser)</td><td>Cancel editing</td></tr>
           <tr><td><kbd>Backspace</kbd></td><td>Git (browser)</td><td>Collapse directory or navigate to parent</td></tr>
-          <tr><td><kbd>o</kbd></td><td>PRs / Jira</td><td>Open the selected item in your web browser</td></tr>
-          <tr><td><kbd>r</kbd></td><td>PRs / Jira</td><td>Refresh data from the remote service</td></tr>
+          <tr><td><kbd>o</kbd></td><td>PRs / Issues / Jira</td><td>Open the selected item in your web browser</td></tr>
+          <tr><td><kbd>r</kbd></td><td>PRs / Issues / Jira</td><td>Refresh data from the remote service</td></tr>
+          <tr><td><kbd>n</kbd></td><td>Issues</td><td>Create a new issue (opens editor popup)</td></tr>
+          <tr><td><kbd>e</kbd></td><td>Issues</td><td>Edit the selected issue's title and body</td></tr>
+          <tr><td><kbd>c</kbd></td><td>Issues</td><td>Add a comment to the selected issue</td></tr>
+          <tr><td><kbd>x</kbd></td><td>Issues</td><td>Close or reopen the selected issue</td></tr>
           <tr><td><kbd>t</kbd></td><td>Jira</td><td>Show available status transitions for selected issue</td></tr>
           <tr><td><kbd>/</kbd></td><td>Jira</td><td>Enter search mode (type query, press Enter to search, Esc to cancel)</td></tr>
         </tbody>
@@ -888,7 +913,7 @@ tail_lines = 200             <span class="comment"># Lines to load from end of t
            ============================================================ -->
       <h2 id="tabs">Tabs Reference</h2>
 
-      <p>The Associate displays up to seven tabs. The first five are always visible; the PRs and Jira tabs appear only when their respective CLI tools are detected.</p>
+      <p>The Associate displays up to eight tabs. The first five are always visible; the PRs, Issues, and Jira tabs appear only when their respective CLI tools are detected and configured.</p>
 
       <div class="callout callout-info">
         <p><strong>Pane pattern:</strong> Every tab uses a left/right pane layout. The left pane shows a list; the right pane shows detail for the selected item. Use <kbd>h</kbd>/<kbd>l</kbd> to switch between panes.</p>
@@ -948,8 +973,23 @@ tail_lines = 200             <span class="comment"># Lines to load from end of t
         </div>
       </div>
 
+      <div class="tab-card" id="tab-issues">
+        <h3 class="tab-card-title">7. Issues</h3>
+        <p>Displays GitHub issues for the current repository, categorized by assignment. Requires the <code>gh</code> CLI to be installed and authenticated. The tab appears automatically when <code>gh</code> is available and a GitHub repository is detected from the git remote.</p>
+        <ul>
+          <li>Issues are grouped into <strong>Assigned to Me</strong>, <strong>My Issues</strong> (authored), and <strong>Other</strong> sections.</li>
+          <li>The right pane shows full issue details: state, author, assignees, labels, milestone, description, comments, and URL.</li>
+          <li>Press <kbd>n</kbd> to create a new issue, <kbd>e</kbd> to edit the selected issue, <kbd>c</kbd> to add a comment, <kbd>x</kbd> to close or reopen.</li>
+          <li>Press <kbd>o</kbd> to open the issue in your browser, <kbd>r</kbd> to refresh manually.</li>
+          <li>Data is polled every 60 seconds automatically.</li>
+        </ul>
+        <div class="callout callout-info">
+          <p>The repository is auto-detected from the git remote. You can override it or configure the state filter in <code>.assoc.toml</code> under <code>[github.issues]</code>.</p>
+        </div>
+      </div>
+
       <div class="tab-card" id="tab-jira">
-        <h3 class="tab-card-title">7. Jira</h3>
+        <h3 class="tab-card-title">8. Jira</h3>
         <p>Displays Jira issues for the current user. Requires the Atlassian CLI (<code>acli</code>) to be installed and configured.</p>
         <ul>
           <li>Issues are grouped by status (To Do, In Progress, Done) and color-coded by type (bug, story, task).</li>
