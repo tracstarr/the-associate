@@ -19,7 +19,7 @@ pub enum ProcessOutput {
 
 /// Spawn `claude -p "<prompt>"` in headless mode.
 ///
-/// Uses `--output-format stream-json` for streaming output and
+/// Uses `--output-format stream-json --verbose` for streaming output and
 /// `--dangerously-skip-permissions` to allow fully autonomous execution.
 ///
 /// Returns the child process handle. Output is sent via `tx` on background
