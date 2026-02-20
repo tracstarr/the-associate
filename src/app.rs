@@ -4,7 +4,7 @@ use std::process::{Child, Command};
 use std::sync::mpsc;
 use std::time::Instant;
 
-use crate::config::{self, ProjectConfig};
+use crate::config::{self, ProjectConfig, TabsConfig};
 use crate::data::{
     cli_detect, filebrowser, git, github, inboxes, jira, linear, path_encoding, plans,
     process_runner::{self, ProcessOutput},
@@ -130,6 +130,7 @@ pub struct App {
 
     // Config
     pub project_config: ProjectConfig,
+    pub tabs_config: TabsConfig,
 
     // Paths
     pub project_cwd: PathBuf,
@@ -277,10 +278,16 @@ impl App {
         let claude_home = config::claude_home();
         let encoded_project = path_encoding::encode_project_path(&project_cwd);
         let project_config = config::load_project_config(&project_cwd);
+        let tabs_config = project_config.tabs_config();
 
-        let has_gh = cli_detect::is_available("gh");
-        let has_jira = cli_detect::is_available("acli");
-        let has_linear = project_config.linear_api_key().is_some();
+        // Skip CLI detection entirely when both GitHub tabs are disabled
+        let gh_tabs_wanted = tabs_config.github_prs.unwrap_or(true)
+            || tabs_config.github_issues.unwrap_or(true);
+        let has_gh = gh_tabs_wanted && cli_detect::is_available("gh");
+        let has_jira =
+            tabs_config.jira.unwrap_or(true) && cli_detect::is_available("acli");
+        let has_linear =
+            tabs_config.linear.unwrap_or(true) && project_config.linear_api_key().is_some();
         let has_claude = cli_detect::is_available("claude");
         // Config github.repo overrides git remote detection
         let gh_repo = project_config.github_repo().map(String::from).or_else(|| {
@@ -310,12 +317,13 @@ impl App {
 
         let tail_lines = project_config.tail_lines();
 
-        App {
+        let mut app = App {
             should_quit: false,
             active_tab: ActiveTab::Sessions,
             show_help: false,
 
             project_config,
+            tabs_config,
             project_cwd,
             claude_home,
             encoded_project,
@@ -439,10 +447,35 @@ impl App {
 
             last_update: Instant::now(),
             last_error: None,
+        };
+
+        // Default to the first enabled tab
+        let visible = app.visible_tabs();
+        if let Some(first) = visible.first() {
+            app.active_tab = first.clone();
+        }
+
+        app
+    }
+
+    /// Check whether a tab is enabled via the `[tabs]` config section.
+    pub fn is_tab_enabled(&self, tab: &ActiveTab) -> bool {
+        let tc = &self.tabs_config;
+        match tab {
+            ActiveTab::Sessions => tc.sessions.unwrap_or(true),
+            ActiveTab::Teams => tc.teams.unwrap_or(true),
+            ActiveTab::Todos => tc.todos.unwrap_or(true),
+            ActiveTab::Git => tc.git.unwrap_or(true),
+            ActiveTab::Plans => tc.plans.unwrap_or(true),
+            ActiveTab::GitHubPRs => tc.github_prs.unwrap_or(true),
+            ActiveTab::GitHubIssues => tc.github_issues.unwrap_or(true),
+            ActiveTab::Jira => tc.jira.unwrap_or(true),
+            ActiveTab::Linear => tc.linear.unwrap_or(true),
+            ActiveTab::Processes => true,
         }
     }
 
-    /// Return the list of tabs that should be visible based on CLI availability.
+    /// Return the list of tabs that should be visible based on CLI availability and config.
     pub fn visible_tabs(&self) -> Vec<ActiveTab> {
         let mut tabs = vec![
             ActiveTab::Sessions,
@@ -466,20 +499,40 @@ impl App {
         if !self.processes.is_empty() {
             tabs.push(ActiveTab::Processes);
         }
+        // Filter out tabs disabled in [tabs] config
+        tabs.retain(|t| self.is_tab_enabled(t));
         tabs
     }
 
-    /// Load all data from disk.
+    /// Load all data from disk, skipping disabled tabs.
     pub fn load_all(&mut self) {
-        self.load_sessions();
-        self.load_teams();
-        self.load_todos();
-        self.load_git_data();
-        self.load_plans();
-        self.load_github_prs();
-        self.load_github_issues();
-        self.load_jira_issues();
-        self.load_linear_issues();
+        if self.is_tab_enabled(&ActiveTab::Sessions) {
+            self.load_sessions();
+        }
+        if self.is_tab_enabled(&ActiveTab::Teams) {
+            self.load_teams();
+        }
+        if self.is_tab_enabled(&ActiveTab::Todos) {
+            self.load_todos();
+        }
+        if self.is_tab_enabled(&ActiveTab::Git) {
+            self.load_git_data();
+        }
+        if self.is_tab_enabled(&ActiveTab::Plans) {
+            self.load_plans();
+        }
+        if self.is_tab_enabled(&ActiveTab::GitHubPRs) {
+            self.load_github_prs();
+        }
+        if self.is_tab_enabled(&ActiveTab::GitHubIssues) {
+            self.load_github_issues();
+        }
+        if self.is_tab_enabled(&ActiveTab::Jira) {
+            self.load_jira_issues();
+        }
+        if self.is_tab_enabled(&ActiveTab::Linear) {
+            self.load_linear_issues();
+        }
         self.last_update = Instant::now();
     }
 
@@ -768,37 +821,39 @@ impl App {
     }
 
     /// Handle a file change event from the watcher.
+    /// Skips processing if the associated tab is disabled.
     pub fn handle_file_change(&mut self, change: FileChange) {
         match change {
-            FileChange::SessionIndex => {
+            FileChange::SessionIndex if self.is_tab_enabled(&ActiveTab::Sessions) => {
                 self.load_sessions();
             }
-            FileChange::Transcript(_path) => {
+            FileChange::Transcript(_) if self.is_tab_enabled(&ActiveTab::Sessions) => {
                 self.refresh_transcript();
             }
-            FileChange::SubagentTranscript(_path) => {
+            FileChange::SubagentTranscript(_) if self.is_tab_enabled(&ActiveTab::Sessions) => {
                 self.refresh_subagent_transcript();
             }
-            FileChange::TeamConfig(_) => {
+            FileChange::TeamConfig(_) if self.is_tab_enabled(&ActiveTab::Teams) => {
                 self.load_teams();
             }
-            FileChange::TeamInbox(_, _) => {
+            FileChange::TeamInbox(_, _) if self.is_tab_enabled(&ActiveTab::Teams) => {
                 self.load_inbox_for_selected_member();
                 self.compute_agent_statuses();
             }
-            FileChange::TaskFile(_team) => {
+            FileChange::TaskFile(_) if self.is_tab_enabled(&ActiveTab::Teams) => {
                 self.load_tasks_for_selected_team();
                 self.compute_agent_statuses();
             }
-            FileChange::TodoFile(_) => {
+            FileChange::TodoFile(_) if self.is_tab_enabled(&ActiveTab::Todos) => {
                 self.load_todos();
             }
-            FileChange::GitChange => {
+            FileChange::GitChange if self.is_tab_enabled(&ActiveTab::Git) => {
                 self.load_git_data();
             }
-            FileChange::PlanFile(_) => {
+            FileChange::PlanFile(_) if self.is_tab_enabled(&ActiveTab::Plans) => {
                 self.load_plans();
             }
+            _ => return, // Tab disabled — skip update
         }
         self.last_update = Instant::now();
     }

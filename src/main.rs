@@ -259,13 +259,14 @@ fn run_app(
     // Initial data load
     app.load_all();
 
-    // Setup file watcher
+    // Setup file watcher (skips directories for disabled tabs)
     let (tx, rx) = mpsc::channel::<AppEvent>();
     let _debouncer = watcher::start_watcher(
         app.claude_home.clone(),
         app.encoded_project.clone(),
         app.project_cwd.clone(),
         tx,
+        &app.tabs_config,
     )?;
 
     let tick_rate = Duration::from_millis(app.project_config.tick_rate());
@@ -299,26 +300,37 @@ fn run_app(
         if last_tick.elapsed() >= tick_rate {
             last_tick = Instant::now();
 
-            // Poll GitHub PRs every 60s
-            if app.has_gh && app.gh_repo.is_some() && app.gh_last_poll.elapsed() >= poll_interval {
+            // Poll GitHub PRs every 60s (skip if tab disabled)
+            if app.is_tab_enabled(&app::ActiveTab::GitHubPRs)
+                && app.has_gh
+                && app.gh_repo.is_some()
+                && app.gh_last_poll.elapsed() >= poll_interval
+            {
                 app.load_github_prs();
             }
 
-            // Poll GitHub Issues every 60s
-            if app.gh_issues_enabled
+            // Poll GitHub Issues every 60s (skip if tab disabled)
+            if app.is_tab_enabled(&app::ActiveTab::GitHubIssues)
+                && app.gh_issues_enabled
                 && app.gh_issues_repo.is_some()
                 && app.gh_issues_last_poll.elapsed() >= poll_interval
             {
                 app.load_github_issues();
             }
 
-            // Poll Jira every 60s
-            if app.has_jira && app.jira_last_poll.elapsed() >= poll_interval {
+            // Poll Jira every 60s (skip if tab disabled)
+            if app.is_tab_enabled(&app::ActiveTab::Jira)
+                && app.has_jira
+                && app.jira_last_poll.elapsed() >= poll_interval
+            {
                 app.load_jira_issues();
             }
 
-            // Poll Linear every 60s
-            if app.has_linear && app.linear_last_poll.elapsed() >= poll_interval {
+            // Poll Linear every 60s (skip if tab disabled)
+            if app.is_tab_enabled(&app::ActiveTab::Linear)
+                && app.has_linear
+                && app.linear_last_poll.elapsed() >= poll_interval
+            {
                 app.load_linear_issues();
             }
 
