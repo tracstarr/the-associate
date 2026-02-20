@@ -66,8 +66,9 @@ fn draw_delete_confirm(f: &mut Frame, area: Rect, name: &str) {
 
     f.render_widget(Clear, popup_area);
 
-    let display_name = if name.len() > 36 {
-        format!("{}...", &name[..33])
+    let display_name = if name.chars().count() > 36 {
+        let truncated: String = name.chars().take(33).collect();
+        format!("{}...", truncated)
     } else {
         name.to_string()
     };

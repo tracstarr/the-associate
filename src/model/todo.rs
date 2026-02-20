@@ -35,8 +35,9 @@ impl TodoFile {
     pub fn display_name(&self) -> String {
         // Truncate the UUID-heavy filenames
         let name = &self.filename;
-        if name.len() > 30 {
-            format!("{}...", &name[..27])
+        if name.chars().count() > 30 {
+            let truncated: String = name.chars().take(27).collect();
+            format!("{}...", truncated)
         } else {
             name.to_string()
         }
