@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::process::Child;
+use std::process::{Child, Command};
 use std::sync::mpsc;
 use std::time::Instant;
 
@@ -2517,6 +2517,8 @@ impl App {
                     cwd: self.project_cwd.clone(),
                     output_lines: Vec::new(),
                     error_lines: Vec::new(),
+                    session_id: None,
+                    progress_lines: Vec::new(),
                 };
                 self.processes.push(process);
                 self.process_children.push((id, child));
@@ -2605,7 +2607,15 @@ impl App {
             match msg {
                 ProcessOutput::Stdout(id, line) => {
                     if let Some(proc) = self.processes.iter_mut().find(|p| p.id == id) {
-                        proc.output_lines.push(line);
+                        proc.output_lines.push(line.clone());
+                        if let Some((new_lines, sid)) = parse_stream_json_event(&line) {
+                            proc.progress_lines.extend(new_lines);
+                            if proc.session_id.is_none() {
+                                if let Some(s) = sid {
+                                    proc.session_id = Some(s);
+                                }
+                            }
+                        }
                     }
                 }
                 ProcessOutput::Stderr(id, line) => {
@@ -2679,5 +2689,268 @@ impl App {
             self.process_children.remove(pos);
         }
         self.processes[idx].status = ProcessStatus::Failed;
+    }
+
+    /// Jump to the Sessions tab and load the transcript for the selected process's session.
+    /// Open the currently selected session in a new Windows Terminal pane
+    /// running `claude --resume <session_id>`.
+    pub fn open_session_in_wt(&mut self) {
+        if self.sessions.is_empty() {
+            return;
+        }
+        let session = &self.sessions[self.session_list_index];
+        let session_id = session.session_id.clone();
+
+        // Use the session's own project path if known, otherwise fall back to
+        // the project directory Associate was launched with.
+        let cwd = session
+            .project_path
+            .as_deref()
+            .unwrap_or_else(|| self.project_cwd.to_str().unwrap_or("."))
+            .to_string();
+
+        let result = Command::new("wt.exe")
+            .args([
+                "split-pane",
+                "-d",
+                &cwd,
+                "--",
+                "claude",
+                "--resume",
+                &session_id,
+            ])
+            .status();
+
+        match result {
+            Ok(s) if s.success() => {}
+            Ok(s) => {
+                self.last_error = Some(format!("wt.exe exited with {}", s));
+            }
+            Err(e) => {
+                self.last_error = Some(format!(
+                    "Failed to run wt.exe: {}. Is Windows Terminal installed?",
+                    e
+                ));
+            }
+        }
+    }
+
+    pub fn jump_to_process_session(&mut self) {
+        let sid = match self.selected_process().and_then(|p| p.session_id.as_deref()) {
+            Some(s) => s.to_string(),
+            None => {
+                self.last_error = Some("Process session not yet linked".to_string());
+                return;
+            }
+        };
+        match self.sessions.iter().position(|s| s.session_id == sid) {
+            Some(i) => {
+                self.session_list_index = i;
+                self.loaded_session_id = None;
+                self.load_selected_transcript();
+                self.sessions_pane = SessionsPane::Transcript;
+                self.active_tab = ActiveTab::Sessions;
+            }
+            None => {
+                let short = &sid[..8.min(sid.len())];
+                self.last_error = Some(format!("Session {} not in list yet", short));
+            }
+        }
+    }
+}
+
+/// Parse one line of `--output-format stream-json` output.
+///
+/// Returns `Some((progress_lines, session_id))` if the event produced displayable
+/// output, or `None` for events that should be silently skipped.
+fn parse_stream_json_event(line: &str) -> Option<(Vec<String>, Option<String>)> {
+    let v: serde_json::Value = serde_json::from_str(line).ok()?;
+    let event_type = v.get("type")?.as_str()?;
+
+    match event_type {
+        "system" => {
+            let subtype = v.get("subtype").and_then(|s| s.as_str()).unwrap_or("");
+            if subtype == "init" {
+                let sid = v
+                    .get("session_id")
+                    .and_then(|s| s.as_str())
+                    .map(|s| s.to_string());
+                let short = sid
+                    .as_deref()
+                    .map(|s| truncate_str(s, 8))
+                    .unwrap_or_default();
+                let line = format!("Session: {}", short);
+                return Some((vec![line], sid));
+            }
+            None
+        }
+
+        "assistant" => {
+            let content = v
+                .get("message")
+                .and_then(|m| m.get("content"))
+                .and_then(|c| c.as_array())?;
+
+            let mut lines = Vec::new();
+            for block in content {
+                let block_type = block.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                match block_type {
+                    "tool_use" => {
+                        let name = block
+                            .get("name")
+                            .and_then(|n| n.as_str())
+                            .unwrap_or("Tool");
+                        let summary =
+                            summarize_tool_input(name, block.get("input"));
+                        lines.push(format!("-> {}: {}", name, summary));
+                    }
+                    "text" => {
+                        if let Some(text) = block.get("text").and_then(|t| t.as_str()) {
+                            let first_line = text.lines().next().unwrap_or("").trim();
+                            if !first_line.is_empty() {
+                                lines.push(format!("  {}", truncate_str(first_line, 80)));
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if lines.is_empty() {
+                None
+            } else {
+                Some((lines, None))
+            }
+        }
+
+        "user" => None, // tool results are noisy
+
+        "result" => {
+            let subtype = v.get("subtype").and_then(|s| s.as_str()).unwrap_or("");
+            let sid = v
+                .get("session_id")
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string());
+
+            if subtype == "success" {
+                let cost = v
+                    .get("cost_usd")
+                    .and_then(|c| c.as_f64())
+                    .map(|c| format!(" (${:.4})", c))
+                    .unwrap_or_default();
+                let result_text = v
+                    .get("result")
+                    .and_then(|r| r.as_str())
+                    .map(|r| {
+                        let first = r.lines().next().unwrap_or("").trim();
+                        if first.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" — {}", truncate_str(first, 60))
+                        }
+                    })
+                    .unwrap_or_default();
+                let entry = format!("[SUCCESS{}]{}", cost, result_text);
+                Some((vec![entry], sid))
+            } else {
+                let entry = format!("[FAILED: {}]", subtype);
+                Some((vec![entry], sid))
+            }
+        }
+
+        _ => None,
+    }
+}
+
+/// Build a short summary string for a tool_use input value.
+fn summarize_tool_input(tool_name: &str, input: Option<&serde_json::Value>) -> String {
+    let input = match input {
+        Some(v) => v,
+        None => return String::new(),
+    };
+
+    match tool_name {
+        "Bash" => {
+            if let Some(cmd) = input.get("command").and_then(|v| v.as_str()) {
+                return truncate_str(cmd, 70);
+            }
+        }
+        "Read" | "Write" | "Edit" | "MultiEdit" => {
+            if let Some(fp) = input.get("file_path").and_then(|v| v.as_str()) {
+                return fp.to_string();
+            }
+        }
+        "Glob" => {
+            let pattern = input
+                .get("pattern")
+                .and_then(|v| v.as_str())
+                .unwrap_or("*");
+            let path = input
+                .get("path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if path.is_empty() {
+                return pattern.to_string();
+            }
+            return format!("{} in {}", pattern, path);
+        }
+        "Grep" => {
+            let pattern = input
+                .get("pattern")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let path = input
+                .get("path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if path.is_empty() {
+                return format!("\"{}\"", pattern);
+            }
+            return format!("\"{}\" in {}", pattern, path);
+        }
+        "Task" => {
+            if let Some(desc) = input
+                .get("description")
+                .or_else(|| input.get("prompt"))
+                .and_then(|v| v.as_str())
+            {
+                return truncate_str(desc, 70);
+            }
+        }
+        "TodoWrite" => {
+            if let Some(todos) = input.get("todos").and_then(|v| v.as_array()) {
+                let count = todos.len();
+                let first = todos
+                    .first()
+                    .and_then(|t| {
+                        t.get("content")
+                            .or_else(|| t.get("task"))
+                            .and_then(|v| v.as_str())
+                    })
+                    .unwrap_or("");
+                return format!("{} todo{}: {}", count, if count == 1 { "" } else { "s" }, truncate_str(first, 40));
+            }
+        }
+        _ => {}
+    }
+
+    // Fallback: first string field value
+    if let Some(obj) = input.as_object() {
+        for (_, val) in obj {
+            if let Some(s) = val.as_str() {
+                return truncate_str(s, 70);
+            }
+        }
+    }
+
+    String::new()
+}
+
+/// Truncate a string to `max` chars, appending "..." if truncated.
+fn truncate_str(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let truncated: String = s.chars().take(max.saturating_sub(3)).collect();
+        format!("{}...", truncated)
     }
 }
