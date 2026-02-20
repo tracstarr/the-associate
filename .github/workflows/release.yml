@@ -25,13 +25,11 @@ jobs:
             exit 1
           fi
 
-      - name: Build Docker image
-        run: docker build -t the-associate-builder .
-
-      - name: Extract assoc.exe
+      - name: Build Docker image and extract assoc.exe
         run: |
-          docker run --rm the-associate-builder \
-            cat target/x86_64-pc-windows-gnu/release/assoc.exe > assoc.exe
+          docker build -t the-associate-builder --target builder .
+          DOCKER_BUILDKIT=1 docker build --target export \
+            --output "type=local,dest=." .
 
       - name: Create release
         uses: softprops/action-gh-release@v2
