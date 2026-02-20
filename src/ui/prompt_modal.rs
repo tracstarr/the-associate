@@ -9,13 +9,13 @@ use crate::app::App;
 /// Draw the prompt editor modal overlay.
 pub fn draw_prompt_modal(f: &mut Frame, area: Rect, app: &App) {
     // Use most of the screen for the editor
-    let width = (area.width - 4).min(120);
-    let height = (area.height - 4).min(40);
+    let width = area.width.saturating_sub(4).min(120);
+    let height = area.height.saturating_sub(4).min(40);
 
     let vert = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length((area.height - height) / 2),
+            Constraint::Length(area.height.saturating_sub(height) / 2),
             Constraint::Length(height),
             Constraint::Min(0),
         ])
@@ -24,7 +24,7 @@ pub fn draw_prompt_modal(f: &mut Frame, area: Rect, app: &App) {
     let horiz = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Length((area.width - width) / 2),
+            Constraint::Length(area.width.saturating_sub(width) / 2),
             Constraint::Length(width),
             Constraint::Min(0),
         ])
