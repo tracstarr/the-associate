@@ -12,6 +12,7 @@ pub mod prompt_modal;
 pub mod sessions_view;
 pub mod tabs;
 pub mod teams_view;
+pub mod terminals_view;
 pub mod theme;
 pub mod todos_view;
 pub mod util;

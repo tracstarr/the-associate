@@ -606,6 +606,7 @@
         <a href="#tab-jira" class="sidebar-link sub">Jira</a>
         <a href="#tab-linear" class="sidebar-link sub">Linear</a>
         <a href="#tab-processes" class="sidebar-link sub">Processes</a>
+        <a href="#tab-terminals" class="sidebar-link sub">Terminals</a>
       </div>
       <div class="sidebar-section">
         <div class="sidebar-heading">Advanced</div>
@@ -1001,6 +1002,7 @@ prompt = "Review the code changes related to this ticket and provide feedback."<
           <tr><td><code>tabs.github_issues</code></td><td>Boolean</td><td><code>true</code></td><td>Show the Issues tab. When <code>false</code>, <code>gh</code> is not detected unless <code>tabs.github_prs</code> is also enabled.</td></tr>
           <tr><td><code>tabs.jira</code></td><td>Boolean</td><td><code>true</code></td><td>Show the Jira tab. When <code>false</code>, <code>acli</code> is not detected at startup.</td></tr>
           <tr><td><code>tabs.linear</code></td><td>Boolean</td><td><code>true</code></td><td>Show the Linear tab. When <code>false</code>, the Linear API key is ignored and no polling occurs.</td></tr>
+          <tr><td><code>tabs.terminals</code></td><td>Boolean</td><td><code>true</code></td><td>Show the Terminals tab.</td></tr>
         </tbody>
       </table>
 
@@ -1102,6 +1104,10 @@ prompt = "Review the code changes related to this ticket and provide feedback."<
           <tr><td><kbd>x</kbd></td><td>Issues</td><td>Close or reopen the selected issue</td></tr>
           <tr><td><kbd>x</kbd></td><td>Processes</td><td>Kill the selected running process</td></tr>
           <tr><td><kbd>s</kbd></td><td>Processes</td><td>Jump to the Sessions tab and load the transcript for the selected process</td></tr>
+          <tr><td><kbd>n</kbd></td><td>Terminals</td><td>Spawn a new terminal session — opens the prompt editor to compose a prompt for Claude Code, then launches it as a plain-text terminal session</td></tr>
+          <tr><td><kbd>x</kbd></td><td>Terminals</td><td>Kill the selected running terminal session</td></tr>
+          <tr><td><kbd>f</kbd></td><td>Terminals</td><td>Toggle follow mode — auto-scroll to latest output in the output pane</td></tr>
+          <tr><td><kbd>s</kbd></td><td>Terminals</td><td>Jump to the Sessions tab and load the transcript for the selected terminal session</td></tr>
           <tr><td><kbd>d</kbd> / <kbd>Del</kbd></td><td>Sessions / Teams / Todos / Plans</td><td>Delete the selected item (shows confirmation prompt)</td></tr>
           <tr><td><kbd>y</kbd></td><td>Sessions / Teams / Todos / Plans</td><td>Confirm deletion when the prompt is active</td></tr>
           <tr><td><kbd>n</kbd> / <kbd>Esc</kbd></td><td>Sessions / Teams / Todos / Plans</td><td>Cancel deletion prompt</td></tr>
@@ -1115,7 +1121,7 @@ prompt = "Review the code changes related to this ticket and provide feedback."<
            ============================================================ -->
       <h2 id="tabs">Tabs Reference</h2>
 
-      <p>The Associate displays up to ten tabs. The first five are always visible; the PRs, Issues, Jira, Linear, and Processes tabs appear only when their respective tools are detected, configured, or actively used.</p>
+      <p>The Associate displays up to eleven tabs. The first five are always visible; the PRs, Issues, Jira, Linear, Processes, and Terminals tabs appear only when their respective tools are detected, configured, or actively used.</p>
 
       <div class="callout callout-info">
         <p><strong>Pane pattern:</strong> Every tab uses a left/right pane layout. The left pane shows a list; the right pane shows detail for the selected item. Use <kbd>h</kbd>/<kbd>l</kbd> to switch between panes.</p>
@@ -1240,6 +1246,22 @@ prompt = "Review the code changes related to this ticket and provide feedback."<
         </ul>
         <div class="callout callout-info">
           <p>Processes run with <code>--dangerously-skip-permissions</code> so they can operate fully autonomously. Review the generated prompt in the modal before confirming with <kbd>Ctrl+Enter</kbd>.</p>
+        </div>
+      </div>
+
+      <div class="tab-card" id="tab-terminals">
+        <h3 class="tab-card-title">11. Terminals</h3>
+        <p>Allows you to spawn and monitor Claude Code CLI sessions directly from within the Associate, without needing a ticket tracker. The tab is always visible once at least one terminal session has been created.</p>
+        <ul>
+          <li>Press <kbd>n</kbd> to open the prompt editor. Write a prompt and press <kbd>Ctrl+Enter</kbd> to launch Claude Code as a headless session with plain-text output.</li>
+          <li>The left pane lists all terminal sessions with a status icon: <strong>&gt;</strong> running, <strong>+</strong> completed, <strong>x</strong> failed.</li>
+          <li>The right pane shows the raw text output from the selected session, scrollable with <kbd>j</kbd>/<kbd>k</kbd>.</li>
+          <li><strong>Follow mode</strong> (<kbd>f</kbd>) &mdash; When active, the output pane auto-scrolls to the latest line as Claude Code produces output.</li>
+          <li>Press <kbd>x</kbd> to kill the selected running session immediately.</li>
+          <li>Press <kbd>s</kbd> to jump to the Sessions tab and load the full structured transcript for the selected session.</li>
+        </ul>
+        <div class="callout callout-info">
+          <p>Unlike the Processes tab (which uses <code>--output-format stream-json</code> for structured progress), the Terminals tab runs Claude Code with plain text output for a more terminal-like experience. Sessions run with <code>--dangerously-skip-permissions</code> so they can operate fully autonomously.</p>
         </div>
       </div>
 

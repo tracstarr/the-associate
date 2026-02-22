@@ -5,21 +5,21 @@ use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wra
 use ratatui::Frame;
 
 use super::theme;
-use crate::app::{App, ProcessesPane};
-use crate::model::process::{ProcessStatus, TicketSource};
+use crate::app::{App, TerminalsPane};
+use crate::model::process::ProcessStatus;
 
-pub fn draw_processes(f: &mut Frame, area: Rect, app: &App) {
+pub fn draw_terminals(f: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(35), Constraint::Percentage(65)])
         .split(area);
 
-    draw_process_list(f, chunks[0], app);
-    draw_process_output(f, chunks[1], app);
+    draw_session_list(f, chunks[0], app);
+    draw_session_output(f, chunks[1], app);
 }
 
-fn draw_process_list(f: &mut Frame, area: Rect, app: &App) {
-    let is_active = app.processes_pane == ProcessesPane::List;
+fn draw_session_list(f: &mut Frame, area: Rect, app: &App) {
+    let is_active = app.terminals_pane == TerminalsPane::List;
     let border_style = if is_active {
         theme::BORDER_ACTIVE
     } else {
@@ -27,20 +27,29 @@ fn draw_process_list(f: &mut Frame, area: Rect, app: &App) {
     };
 
     let running_count = app
-        .processes
+        .terminal_sessions
         .iter()
         .filter(|p| p.status == ProcessStatus::Running)
         .count();
-    let title = format!(" Processes [{}/{}] ", running_count, app.processes.len());
+
+    let title = if app.terminal_sessions.is_empty() {
+        " Terminals ".to_string()
+    } else {
+        format!(
+            " Terminals [{}/{}] ",
+            running_count,
+            app.terminal_sessions.len()
+        )
+    };
 
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
         .border_style(border_style);
 
-    if app.processes.is_empty() {
+    if app.terminal_sessions.is_empty() {
         let p = Paragraph::new(
-            "No processes running\n\nPress 'c' on a GitHub PR or Jira issue to launch",
+            "No terminal sessions.\n\nPress 'n' to spawn a new\nClaude Code session.",
         )
         .style(theme::EMPTY_STATE)
         .block(block)
@@ -50,32 +59,32 @@ fn draw_process_list(f: &mut Frame, area: Rect, app: &App) {
     }
 
     let items: Vec<ListItem> = app
-        .processes
+        .terminal_sessions
         .iter()
-        .map(|proc| {
-            let status_icon = match proc.status {
-                ProcessStatus::Running => Span::styled(" * ", theme::PROCESS_RUNNING),
+        .map(|sess| {
+            let status_icon = match sess.status {
+                ProcessStatus::Running => Span::styled(" > ", theme::PROCESS_RUNNING),
                 ProcessStatus::Completed => Span::styled(" + ", theme::PROCESS_COMPLETED),
                 ProcessStatus::Failed => Span::styled(" x ", theme::PROCESS_FAILED),
             };
 
-            let source_icon = match proc.source {
-                TicketSource::GitHubPR => "GH",
-                TicketSource::GitHubIssue => "GH",
-                TicketSource::Linear => "LN",
-                TicketSource::Jira => "JR",
-                TicketSource::Manual => "TM",
+            let label = if sess.label.is_empty() {
+                sess.label.as_str()
+            } else {
+                sess.label.as_str()
+            };
+
+            let title_text = if sess.title.is_empty() {
+                truncate(&sess.prompt, 35)
+            } else {
+                truncate(&sess.title, 35)
             };
 
             let line = Line::from(vec![
                 status_icon,
-                Span::styled(
-                    format!("[{}] ", source_icon),
-                    theme::LIST_NORMAL.add_modifier(Modifier::DIM),
-                ),
-                Span::styled(&proc.label, theme::LIST_NORMAL.add_modifier(Modifier::BOLD)),
+                Span::styled(label, theme::LIST_NORMAL.add_modifier(Modifier::BOLD)),
                 Span::raw(" "),
-                Span::styled(truncate(&proc.title, 30), theme::LIST_NORMAL),
+                Span::styled(title_text, theme::LIST_NORMAL),
             ]);
 
             ListItem::new(line)
@@ -83,7 +92,9 @@ fn draw_process_list(f: &mut Frame, area: Rect, app: &App) {
         .collect();
 
     let mut state = ListState::default();
-    state.select(Some(app.process_index));
+    state.select(Some(
+        app.terminal_index.min(app.terminal_sessions.len().saturating_sub(1)),
+    ));
 
     let list = List::new(items)
         .block(block)
@@ -92,32 +103,29 @@ fn draw_process_list(f: &mut Frame, area: Rect, app: &App) {
     f.render_stateful_widget(list, area, &mut state);
 }
 
-fn draw_process_output(f: &mut Frame, area: Rect, app: &App) {
-    let is_active = app.processes_pane == ProcessesPane::Output;
+fn draw_session_output(f: &mut Frame, area: Rect, app: &App) {
+    let is_active = app.terminals_pane == TerminalsPane::Output;
     let border_style = if is_active {
         theme::BORDER_ACTIVE
     } else {
         theme::BORDER_INACTIVE
     };
 
-    let proc = app.selected_process();
+    let sess = app.selected_terminal();
 
-    let title = if let Some(p) = proc {
-        let status_str = match p.status {
+    let title = if let Some(s) = sess {
+        let status_str = match s.status {
             ProcessStatus::Running => "RUNNING",
             ProcessStatus::Completed => "DONE",
             ProcessStatus::Failed => "FAILED",
         };
-        let sid_suffix = p
-            .session_id
-            .as_deref()
-            .map(|s| format!(" [sid:{}]", &s[..8.min(s.len())]))
-            .unwrap_or_default();
-        let follow_indicator = if app.process_follow { " [FOLLOW]" } else { "" };
-        format!(
-            " {} {} [{}]{}{} ",
-            p.label, p.title, status_str, sid_suffix, follow_indicator
-        )
+        let follow_indicator = if app.terminal_follow { " [FOLLOW]" } else { "" };
+        let display = if s.title.is_empty() {
+            truncate(&s.prompt, 40)
+        } else {
+            truncate(&s.title, 40)
+        };
+        format!(" {} [{}]{} ", display, status_str, follow_indicator)
     } else {
         " Output ".to_string()
     };
@@ -127,10 +135,11 @@ fn draw_process_output(f: &mut Frame, area: Rect, app: &App) {
         .borders(Borders::ALL)
         .border_style(border_style);
 
-    let Some(proc) = proc else {
-        let p = Paragraph::new("Select a process to view output")
+    let Some(sess) = sess else {
+        let p = Paragraph::new("Select a session to view output.\n\nPress 'n' to start a new session.")
             .style(theme::EMPTY_STATE)
-            .block(block);
+            .block(block)
+            .wrap(Wrap { trim: false });
         f.render_widget(p, area);
         return;
     };
@@ -140,38 +149,21 @@ fn draw_process_output(f: &mut Frame, area: Rect, app: &App) {
 
     let mut lines: Vec<Line> = Vec::new();
 
-    if !proc.progress_lines.is_empty() {
-        for line in &proc.progress_lines {
-            let style = if line.starts_with("->") {
-                theme::TX_TOOL
-            } else if line.starts_with("[SUCCESS") {
-                theme::PROCESS_COMPLETED
-            } else if line.starts_with("[FAIL") {
-                theme::PROCESS_FAILED
-            } else if line.starts_with("Session:") {
-                theme::TX_SYSTEM
-            } else {
-                theme::PROCESS_STDOUT
-            };
-            lines.push(Line::from(Span::styled(line.as_str(), style)));
-        }
-    } else {
-        // Fall back to raw output lines dimly if no parsed progress yet
-        for line in &proc.output_lines {
-            lines.push(Line::from(Span::styled(
-                line.as_str(),
-                theme::PROCESS_STDOUT.add_modifier(Modifier::DIM),
-            )));
-        }
+    // Raw output lines (plain text from claude -p without stream-json)
+    for line in &sess.output_lines {
+        lines.push(Line::from(Span::styled(
+            line.as_str(),
+            theme::PROCESS_STDOUT,
+        )));
     }
 
-    if !proc.error_lines.is_empty() {
+    if !sess.error_lines.is_empty() {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             "--- stderr ---",
             theme::PROCESS_STDERR_HEADER,
         )));
-        for line in &proc.error_lines {
+        for line in &sess.error_lines {
             lines.push(Line::from(Span::styled(
                 line.as_str(),
                 theme::PROCESS_STDERR,
@@ -190,7 +182,7 @@ fn draw_process_output(f: &mut Frame, area: Rect, app: &App) {
     let inner_height = inner.height as usize;
     let total = lines.len();
     let scroll_offset = app
-        .process_output_scroll
+        .terminal_output_scroll
         .min(total.saturating_sub(inner_height));
     let visible_end = (scroll_offset + inner_height).min(total);
 

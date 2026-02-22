@@ -40,6 +40,18 @@ pub fn draw_tab_bar(f: &mut Frame, area: Rect, app: &App) {
                     format!("{}:Procs", num)
                 }
             }
+            ActiveTab::Terminals => {
+                let running = app
+                    .terminal_sessions
+                    .iter()
+                    .filter(|p| p.status == crate::model::process::ProcessStatus::Running)
+                    .count();
+                if running > 0 {
+                    format!("{}:Terminals({})", num, running)
+                } else {
+                    format!("{}:Terminals", num)
+                }
+            }
         };
 
         let style = if *tab == app.active_tab {

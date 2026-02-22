@@ -5,9 +5,10 @@ use ratatui::Frame;
 
 use super::{
     git_view, github_view, help_overlay, issues_view, jira_view, linear_view, plans_view,
-    processes_view, prompt_modal, sessions_view, tabs, teams_view, theme, todos_view,
+    processes_view, prompt_modal, sessions_view, tabs, teams_view, terminals_view, theme,
+    todos_view,
 };
-use crate::app::{ActiveTab, App, GitMode, SessionsPane};
+use crate::app::{ActiveTab, App, GitMode, SessionsPane, TerminalsPane};
 
 pub fn draw_layout(f: &mut Frame, app: &App) {
     let has_input_bar = app.send_mode;
@@ -136,6 +137,7 @@ fn draw_content(f: &mut Frame, area: Rect, app: &App) {
         ActiveTab::Jira => jira_view::draw_jira(f, area, app),
         ActiveTab::Linear => linear_view::draw_linear(f, area, app),
         ActiveTab::Processes => processes_view::draw_processes(f, area, app),
+        ActiveTab::Terminals => terminals_view::draw_terminals(f, area, app),
     }
 }
 
@@ -221,6 +223,20 @@ fn hint_text(app: &App) -> Vec<(&'static str, &'static str)> {
             ("x", "kill"),
             ("s", "jump to session"),
         ],
+        ActiveTab::Terminals => match app.terminals_pane {
+            TerminalsPane::List => vec![
+                ("j/k", "nav"),
+                ("n", "new session"),
+                ("x", "kill"),
+                ("f", "follow"),
+            ],
+            TerminalsPane::Output => vec![
+                ("j/k", "scroll"),
+                ("f", "follow"),
+                ("s", "jump to session"),
+                ("h/l", "panes"),
+            ],
+        },
     };
     hints.push(("i", "send"));
     hints.push(("^H", "help"));

@@ -230,6 +230,7 @@ Set any tab to `false` to disable it entirely. Disabled tabs are hidden from the
 | `tabs.github_issues` | Boolean | `true` | Show the Issues tab. When `false`, `gh` is not detected unless `tabs.github_prs` is also enabled. |
 | `tabs.jira` | Boolean | `true` | Show the Jira tab. When `false`, `acli` is not detected at startup. |
 | `tabs.linear` | Boolean | `true` | Show the Linear tab. When `false`, the Linear API key is ignored and no polling occurs. |
+| `tabs.terminals` | Boolean | `true` | Show the Terminals tab. |
 
 ### Custom Prompts
 
@@ -303,6 +304,10 @@ The Associate is fully keyboard-driven. Press `?` or `Ctrl+H` at any time to sho
 | `x` | Issues | Close or reopen the selected issue |
 | `x` | Processes | Kill the selected running process |
 | `s` | Processes | Jump to the Sessions tab and load the transcript for the selected process |
+| `n` | Terminals | Spawn a new terminal session (opens prompt editor) |
+| `x` | Terminals | Kill the selected running terminal session |
+| `f` | Terminals | Toggle follow mode for the terminal output pane |
+| `s` | Terminals | Jump to the Sessions tab and load the transcript for the selected session |
 | `d` / `Del` | Sessions / Teams / Todos / Plans | Delete the selected item (shows confirmation prompt) |
 | `y` | Sessions / Teams / Todos / Plans | Confirm deletion when the prompt is active |
 | `n` / `Esc` | Sessions / Teams / Todos / Plans | Cancel deletion prompt |
@@ -311,7 +316,7 @@ The Associate is fully keyboard-driven. Press `?` or `Ctrl+H` at any time to sho
 
 ## Tabs Reference
 
-The Associate displays up to ten tabs. The first five are always visible; the PRs, Issues, Jira, Linear, and Processes tabs appear only when their respective tools are detected, configured, or actively used.
+The Associate displays up to eleven tabs. The first five plus the Terminals tab are always visible; the PRs, Issues, Jira, Linear, and Processes tabs appear only when their respective tools are detected, configured, or actively used.
 
 > **Pane pattern:** Every tab uses a left/right pane layout. The left pane shows a list; the right pane shows detail for the selected item. Use `h`/`l` to switch between panes.
 
@@ -412,6 +417,19 @@ Tracks every headless Claude Code process spawned via the prompt modal (`p` on P
 - Press `s` to jump to the Sessions tab and load the full transcript for the selected process. This works once Claude Code has emitted its first stream-json event.
 
 > Processes run with `--dangerously-skip-permissions` so they can operate fully autonomously. Review the generated prompt in the modal before confirming with `Ctrl+Enter`.
+
+### 11. Terminals
+
+Lets you spawn and monitor Claude Code sessions directly from within the TUI — without going through an issue tracker. Always visible (unlike Processes, which only appears after a first launch from a ticket tab).
+
+- Press `n` to open the prompt editor and compose a free-form prompt. Confirm with `Ctrl+Enter` to launch a new Claude Code session. The session immediately appears in the left pane and the output pane opens automatically.
+- The left pane lists sessions with a status indicator: `>` running, `+` completed, `x` failed.
+- The right pane shows the raw text output from `claude -p <prompt>`, streamed live as the process writes to stdout.
+- Press `f` to toggle follow mode — when active, the output pane auto-scrolls as new lines arrive. Scrolling up manually disables it; pressing `G` re-enables it.
+- Press `x` to kill the selected running session immediately.
+- Press `s` to jump to the Sessions tab and view the full structured transcript once Claude Code has started its session.
+
+> Terminal sessions run `claude -p <prompt> --dangerously-skip-permissions` and capture raw plain-text output (not stream-json). The output matches what you would see if you ran the same command directly in a terminal. Sessions can be disabled with `tabs.terminals = false` in `.assoc.toml`.
 
 ## Architecture
 
