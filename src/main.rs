@@ -117,7 +117,8 @@ TUI KEYBINDINGS:
   e                  Edit issue (Issues tab) / file (browser)
   c                  Comment on issue (Issues tab)
   p                  Launch Claude Code prompt (PRs / Issues / Linear / Jira)
-  x                  Close/reopen issue (Issues tab) / Kill process (Processes tab)
+  n                  Spawn new terminal session (Terminals tab) / New issue (Issues tab)
+  x                  Close/reopen issue (Issues tab) / Kill process (Processes/Terminals tab)
   d / Del            Delete file (Sessions / Teams / Todos / Plans)
   o                  Open in browser (PRs / Issues / Jira / Linear)
   r                  Refresh data (PRs / Issues / Jira / Linear)
@@ -533,14 +534,15 @@ fn handle_key(app: &mut App, key: KeyEvent) {
         KeyCode::Char('g') => app.jump_top(),
         KeyCode::Char('G') => app.jump_bottom(),
 
-        // Follow mode (Sessions tab / Processes tab)
+        // Follow mode (Sessions tab / Processes tab / Terminals tab)
         KeyCode::Char('f') => match app.active_tab {
             app::ActiveTab::Sessions => app.toggle_follow(),
             app::ActiveTab::Processes => app.toggle_process_follow(),
+            app::ActiveTab::Terminals => app.toggle_terminal_follow(),
             _ => {}
         },
 
-        // Subagent transcript cycling (Sessions tab) / Jump to session (Processes tab)
+        // Subagent transcript cycling (Sessions tab) / Jump to session (Processes / Terminals tab)
         KeyCode::Char('s') => {
             if app.active_tab == app::ActiveTab::Sessions
                 && app.sessions_pane == app::SessionsPane::Transcript
@@ -548,6 +550,8 @@ fn handle_key(app: &mut App, key: KeyEvent) {
                 app.cycle_subagent();
             } else if app.active_tab == app::ActiveTab::Processes {
                 app.jump_to_process_session();
+            } else if app.active_tab == app::ActiveTab::Terminals {
+                app.jump_to_terminal_session();
             }
         }
 
@@ -576,10 +580,12 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             _ => {}
         },
 
-        // New issue (Issues tab)
+        // New issue (Issues tab) / New terminal session (Terminals tab)
         KeyCode::Char('n') => {
             if app.active_tab == app::ActiveTab::GitHubIssues {
                 app.issues_start_create();
+            } else if app.active_tab == app::ActiveTab::Terminals {
+                app.terminal_spawn_new();
             }
         }
 
@@ -601,10 +607,11 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             _ => {}
         },
 
-        // Close/reopen issue (Issues tab) / Kill process (Processes tab)
+        // Close/reopen issue (Issues tab) / Kill process (Processes tab) / Kill terminal (Terminals tab)
         KeyCode::Char('x') => match app.active_tab {
             app::ActiveTab::GitHubIssues => app.issues_toggle_state(),
             app::ActiveTab::Processes => app.kill_selected_process(),
+            app::ActiveTab::Terminals => app.kill_selected_terminal(),
             _ => {}
         },
 

@@ -39,10 +39,17 @@ pub enum ActiveTab {
     Jira,
     Linear,
     Processes,
+    Terminals,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ProcessesPane {
+    List,
+    Output,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TerminalsPane {
     List,
     Output,
 }
@@ -265,6 +272,13 @@ pub struct App {
     pub process_rx: Option<mpsc::Receiver<ProcessOutput>>,
     pub next_process_id: usize,
 
+    // Terminals tab — user-initiated Claude Code sessions (raw plain-text output)
+    pub terminal_sessions: Vec<SpawnedProcess>,
+    pub terminal_index: usize,
+    pub terminal_output_scroll: usize,
+    pub terminals_pane: TerminalsPane,
+    pub terminal_follow: bool,
+
     // Prompt picker (custom prompts selection)
     pub show_prompt_picker: bool,
     pub prompt_picker_index: usize,
@@ -467,6 +481,12 @@ impl App {
             process_rx: None,
             next_process_id: 1,
 
+            terminal_sessions: Vec::new(),
+            terminal_index: 0,
+            terminal_output_scroll: 0,
+            terminals_pane: TerminalsPane::List,
+            terminal_follow: true,
+
             show_prompt_picker: false,
             prompt_picker_index: 0,
 
@@ -547,6 +567,7 @@ impl App {
             ActiveTab::Jira => tc.jira(),
             ActiveTab::Linear => tc.linear(),
             ActiveTab::Processes => true,
+            ActiveTab::Terminals => tc.terminals(),
         }
     }
 
@@ -574,6 +595,8 @@ impl App {
         if !self.processes.is_empty() {
             tabs.push(ActiveTab::Processes);
         }
+        // Terminals tab is always included when enabled (even when empty, so users can spawn)
+        tabs.push(ActiveTab::Terminals);
         // Filter out tabs disabled in [tabs] config
         tabs.retain(|t| self.is_tab_enabled(t));
         tabs
@@ -1192,6 +1215,18 @@ impl App {
                     self.process_output_scroll = self.process_output_scroll.saturating_add(1);
                 }
             },
+            ActiveTab::Terminals => match self.terminals_pane {
+                TerminalsPane::List => {
+                    if !self.terminal_sessions.is_empty() {
+                        self.terminal_index =
+                            (self.terminal_index + 1).min(self.terminal_sessions.len() - 1);
+                        self.terminal_output_scroll = 0;
+                    }
+                }
+                TerminalsPane::Output => {
+                    self.terminal_output_scroll = self.terminal_output_scroll.saturating_add(1);
+                }
+            },
         }
     }
 
@@ -1316,6 +1351,16 @@ impl App {
                     self.process_output_scroll = self.process_output_scroll.saturating_sub(1);
                 }
             },
+            ActiveTab::Terminals => match self.terminals_pane {
+                TerminalsPane::List => {
+                    self.terminal_index = self.terminal_index.saturating_sub(1);
+                    self.terminal_output_scroll = 0;
+                }
+                TerminalsPane::Output => {
+                    self.terminal_follow = false;
+                    self.terminal_output_scroll = self.terminal_output_scroll.saturating_sub(1);
+                }
+            },
         }
     }
 
@@ -1363,6 +1408,9 @@ impl App {
             }
             ActiveTab::Processes => {
                 self.processes_pane = ProcessesPane::List;
+            }
+            ActiveTab::Terminals => {
+                self.terminals_pane = TerminalsPane::List;
             }
         }
     }
@@ -1412,6 +1460,9 @@ impl App {
             }
             ActiveTab::Processes => {
                 self.processes_pane = ProcessesPane::Output;
+            }
+            ActiveTab::Terminals => {
+                self.terminals_pane = TerminalsPane::Output;
             }
         }
     }
@@ -1463,6 +1514,11 @@ impl App {
             ActiveTab::Processes => {
                 if self.processes_pane == ProcessesPane::List {
                     self.processes_pane = ProcessesPane::Output;
+                }
+            }
+            ActiveTab::Terminals => {
+                if self.terminals_pane == TerminalsPane::List {
+                    self.terminals_pane = TerminalsPane::Output;
                 }
             }
             _ => {}
@@ -1579,6 +1635,15 @@ impl App {
                 }
                 ProcessesPane::Output => {
                     self.process_output_scroll = 0;
+                }
+            },
+            ActiveTab::Terminals => match self.terminals_pane {
+                TerminalsPane::List => {
+                    self.terminal_index = 0;
+                    self.terminal_output_scroll = 0;
+                }
+                TerminalsPane::Output => {
+                    self.terminal_output_scroll = 0;
                 }
             },
         }
@@ -1775,6 +1840,18 @@ impl App {
                     self.process_output_scroll = usize::MAX;
                 }
             },
+            ActiveTab::Terminals => match self.terminals_pane {
+                TerminalsPane::List => {
+                    if !self.terminal_sessions.is_empty() {
+                        self.terminal_index = self.terminal_sessions.len() - 1;
+                        self.terminal_output_scroll = 0;
+                    }
+                }
+                TerminalsPane::Output => {
+                    self.terminal_follow = true;
+                    self.terminal_output_scroll = usize::MAX;
+                }
+            },
         }
     }
 
@@ -1790,6 +1867,95 @@ impl App {
         self.process_follow = !self.process_follow;
         if self.process_follow {
             self.process_output_scroll = usize::MAX;
+        }
+    }
+
+    /// Toggle follow mode for terminal session output.
+    pub fn toggle_terminal_follow(&mut self) {
+        self.terminal_follow = !self.terminal_follow;
+        if self.terminal_follow {
+            self.terminal_output_scroll = usize::MAX;
+        }
+    }
+
+    /// Get the currently selected terminal session.
+    pub fn selected_terminal(&self) -> Option<&SpawnedProcess> {
+        if self.terminal_sessions.is_empty() {
+            return None;
+        }
+        let idx = self.terminal_index.min(self.terminal_sessions.len() - 1);
+        Some(&self.terminal_sessions[idx])
+    }
+
+    /// Kill the currently selected terminal session.
+    pub fn kill_selected_terminal(&mut self) {
+        if self.terminal_sessions.is_empty() {
+            return;
+        }
+        let idx = self.terminal_index.min(self.terminal_sessions.len() - 1);
+        let id = self.terminal_sessions[idx].id;
+
+        if self.terminal_sessions[idx].status != ProcessStatus::Running {
+            return;
+        }
+
+        if let Some(pos) = self
+            .process_children
+            .iter_mut()
+            .position(|(pid, _)| *pid == id)
+        {
+            kill_process_tree(self.process_children[pos].1.id());
+            self.process_children.remove(pos);
+        }
+        self.terminal_sessions[idx].status = ProcessStatus::Failed;
+    }
+
+    /// Open a prompt modal to spawn a new terminal session from the Terminals tab.
+    pub fn terminal_spawn_new(&mut self) {
+        if !self.has_claude {
+            self.last_error = Some("claude CLI not found on PATH".to_string());
+            return;
+        }
+
+        let id = self.next_process_id;
+        let ticket = crate::model::process::TicketInfo {
+            source: crate::model::process::TicketSource::Manual,
+            key: format!("T-{}", id),
+            title: String::new(),
+            description: String::new(),
+            labels: Vec::new(),
+            url: String::new(),
+            extra_fields: Vec::new(),
+        };
+
+        // Open the prompt editor with an empty prompt so the user writes their own
+        self.open_prompt_editor_with(ticket, "");
+    }
+
+    /// Jump to the Sessions tab and load the transcript for the selected terminal session.
+    pub fn jump_to_terminal_session(&mut self) {
+        let sid = match self
+            .selected_terminal()
+            .and_then(|p| p.session_id.as_deref())
+        {
+            Some(s) => s.to_string(),
+            None => {
+                self.last_error = Some("Terminal session not yet linked".to_string());
+                return;
+            }
+        };
+        match self.sessions.iter().position(|s| s.session_id == sid) {
+            Some(i) => {
+                self.session_list_index = i;
+                self.loaded_session_id = None;
+                self.load_selected_transcript();
+                self.sessions_pane = SessionsPane::Transcript;
+                self.active_tab = ActiveTab::Sessions;
+            }
+            None => {
+                let short = &sid[..8.min(sid.len())];
+                self.last_error = Some(format!("Session {} not in list yet", short));
+            }
         }
     }
 
@@ -2970,7 +3136,12 @@ impl App {
     }
 
     /// Spawn a new Claude Code process with the given prompt.
+    ///
+    /// Sessions with `TicketSource::Manual` are routed to the Terminals tab and use
+    /// plain text output. All other sources go to the Processes tab with stream-json.
     fn spawn_claude_process(&mut self, ticket: &TicketInfo, prompt: &str) {
+        use crate::model::process::TicketSource;
+
         self.ensure_process_channel();
 
         let id = self.next_process_id;
@@ -2984,7 +3155,16 @@ impl App {
                 return;
             }
         };
-        match process_runner::spawn_claude_headless(id, prompt, &self.project_cwd, tx) {
+
+        let is_manual = ticket.source == TicketSource::Manual;
+
+        let spawn_result = if is_manual {
+            process_runner::spawn_claude_raw(id, prompt, &self.project_cwd, tx)
+        } else {
+            process_runner::spawn_claude_headless(id, prompt, &self.project_cwd, tx)
+        };
+
+        match spawn_result {
             Ok(child) => {
                 let process = SpawnedProcess {
                     id,
@@ -2999,13 +3179,22 @@ impl App {
                     session_id: None,
                     progress_lines: Vec::new(),
                 };
-                self.processes.push(process);
                 self.process_children.push((id, child));
 
-                // Auto-switch to Processes tab
-                self.active_tab = ActiveTab::Processes;
-                self.process_index = self.processes.len() - 1;
-                self.process_output_scroll = 0;
+                if is_manual {
+                    // Terminal session — add to Terminals tab list
+                    self.terminal_sessions.push(process);
+                    self.active_tab = ActiveTab::Terminals;
+                    self.terminal_index = self.terminal_sessions.len() - 1;
+                    self.terminal_output_scroll = 0;
+                    self.terminals_pane = TerminalsPane::Output;
+                } else {
+                    // Ticket-driven — add to Processes tab list
+                    self.processes.push(process);
+                    self.active_tab = ActiveTab::Processes;
+                    self.process_index = self.processes.len() - 1;
+                    self.process_output_scroll = 0;
+                }
             }
             Err(e) => {
                 self.last_error = Some(format!("Failed to spawn claude: {}", e));
@@ -3100,15 +3289,22 @@ impl App {
     pub fn poll_process_output(&mut self) {
         use crate::model::process::MAX_PROCESS_OUTPUT_LINES;
 
-        let rx = match self.process_rx {
-            Some(ref rx) => rx,
-            None => return,
+        // Collect all pending messages into a local vec to release the channel borrow
+        // before we mutate processes / terminal_sessions.
+        let messages: Vec<ProcessOutput> = {
+            let rx = match self.process_rx {
+                Some(ref rx) => rx,
+                None => return,
+            };
+            std::iter::from_fn(|| rx.try_recv().ok()).collect()
         };
 
-        let selected_id = self.selected_process().map(|p| p.id);
-        let mut got_output_for_selected = false;
+        let selected_proc_id = self.selected_process().map(|p| p.id);
+        let selected_term_id = self.selected_terminal().map(|p| p.id);
+        let mut got_output_for_proc = false;
+        let mut got_output_for_term = false;
 
-        while let Ok(msg) = rx.try_recv() {
+        for msg in messages {
             match msg {
                 ProcessOutput::Stdout(id, line) => {
                     if let Some(proc) = self.processes.iter_mut().find(|p| p.id == id) {
@@ -3124,8 +3320,18 @@ impl App {
                                 }
                             }
                         }
-                        if Some(id) == selected_id {
-                            got_output_for_selected = true;
+                        if Some(id) == selected_proc_id {
+                            got_output_for_proc = true;
+                        }
+                    } else if let Some(term) =
+                        self.terminal_sessions.iter_mut().find(|p| p.id == id)
+                    {
+                        term.output_lines.push_back(line);
+                        if term.output_lines.len() > MAX_PROCESS_OUTPUT_LINES {
+                            term.output_lines.pop_front();
+                        }
+                        if Some(id) == selected_term_id {
+                            got_output_for_term = true;
                         }
                     }
                 }
@@ -3135,8 +3341,18 @@ impl App {
                         if proc.error_lines.len() > MAX_PROCESS_OUTPUT_LINES {
                             proc.error_lines.pop_front();
                         }
-                        if Some(id) == selected_id {
-                            got_output_for_selected = true;
+                        if Some(id) == selected_proc_id {
+                            got_output_for_proc = true;
+                        }
+                    } else if let Some(term) =
+                        self.terminal_sessions.iter_mut().find(|p| p.id == id)
+                    {
+                        term.error_lines.push_back(line);
+                        if term.error_lines.len() > MAX_PROCESS_OUTPUT_LINES {
+                            term.error_lines.pop_front();
+                        }
+                        if Some(id) == selected_term_id {
+                            got_output_for_term = true;
                         }
                     }
                 }
@@ -3144,11 +3360,14 @@ impl App {
         }
 
         // Auto-scroll to bottom if follow mode is on and new output arrived
-        if self.process_follow && got_output_for_selected {
+        if self.process_follow && got_output_for_proc {
             self.process_output_scroll = usize::MAX;
         }
+        if self.terminal_follow && got_output_for_term {
+            self.terminal_output_scroll = usize::MAX;
+        }
 
-        // Check for exited children
+        // Check for exited children (shared by both processes and terminal_sessions)
         let mut exited = Vec::new();
         for (id, child) in &mut self.process_children {
             match child.try_wait() {
@@ -3162,13 +3381,18 @@ impl App {
             }
         }
         for (id, success) in exited {
+            let new_status = if success {
+                ProcessStatus::Completed
+            } else {
+                ProcessStatus::Failed
+            };
             if let Some(proc) = self.processes.iter_mut().find(|p| p.id == id) {
                 if proc.status == ProcessStatus::Running {
-                    proc.status = if success {
-                        ProcessStatus::Completed
-                    } else {
-                        ProcessStatus::Failed
-                    };
+                    proc.status = new_status;
+                }
+            } else if let Some(term) = self.terminal_sessions.iter_mut().find(|p| p.id == id) {
+                if term.status == ProcessStatus::Running {
+                    term.status = new_status;
                 }
             }
             self.process_children.retain(|(pid, _)| *pid != id);

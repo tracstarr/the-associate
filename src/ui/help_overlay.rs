@@ -8,7 +8,7 @@ use super::theme;
 pub fn draw_help(f: &mut Frame, area: Rect) {
     // Center a box
     let width = 60u16.min(area.width.saturating_sub(4));
-    let height = 38u16.min(area.height.saturating_sub(4));
+    let height = 40u16.min(area.height.saturating_sub(4));
 
     let vert = Layout::default()
         .direction(Direction::Vertical)
@@ -61,7 +61,8 @@ pub fn draw_help(f: &mut Frame, area: Rect) {
             "p",
             "Launch Claude Code prompt (PRs / Issues / Linear / Jira)",
         ),
-        ("s", "Jump to session (Processes tab)"),
+        ("s", "Jump to session (Processes / Terminals tab)"),
+        ("n", "Spawn new terminal session (Terminals tab)"),
         ("d / Del", "Delete file (Sessions/Teams/Todos/Plans)"),
         ("i", "Send input to Claude pane"),
         ("? / Ctrl-H", "Toggle this help"),

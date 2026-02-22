@@ -60,6 +60,7 @@ pub struct TabsConfig {
     github_issues: Option<bool>,
     jira: Option<bool>,
     linear: Option<bool>,
+    terminals: Option<bool>,
 }
 
 impl TabsConfig {
@@ -89,6 +90,9 @@ impl TabsConfig {
     }
     pub fn linear(&self) -> bool {
         self.linear.unwrap_or(true)
+    }
+    pub fn terminals(&self) -> bool {
+        self.terminals.unwrap_or(true)
     }
 }
 

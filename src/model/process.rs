@@ -38,6 +38,8 @@ pub enum TicketSource {
     GitHubIssue,
     Linear,
     Jira,
+    /// Spawned directly from the Terminals tab (not from a ticket tracker).
+    Manual,
 }
 
 /// Status of a spawned process.
